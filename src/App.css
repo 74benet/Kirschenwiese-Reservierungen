@@ -1,0 +1,26 @@
+/* App.css */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Roboto', sans-serif;
+}
+
+.background {
+  background: linear-gradient(135deg, rgba(241, 147, 100, 0.9), rgba(178, 60, 60, 0.9)), url('/public/background.png');
+  background-size: auto, auto; /* Ensure the gradient covers the entire area and the pattern repeats */
+  background-repeat: no-repeat, repeat; /* No repeat for the gradient, repeat for the pattern */
+  background-blend-mode: normal;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.accordion-summary {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  padding: 4px;
+}
+

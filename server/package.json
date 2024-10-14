@@ -1,0 +1,14 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "imap": "^0.8.19",
+    "mailparser": "^3.7.1",
+    "cors": "^2.8.5"
+  }
+}
