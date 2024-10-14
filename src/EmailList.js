@@ -30,6 +30,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
+
 const customTheme = createTheme({
     components: {
         MuiOutlinedInput: {
@@ -87,7 +88,7 @@ const EmailList = () => {
     const fetchEmails = useCallback(async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`${backend_url}${sortBy}`);
+            const response = await axios.get(`${test_url}/emails?sortBy=${sortBy}`);
             setEmails(response.data);
         } catch (error) {
             console.error('Error fetching emails:', error);
