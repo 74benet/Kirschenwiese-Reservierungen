@@ -134,6 +134,29 @@ const EmailList = () => {
         setSelectedEmail(null);
     };
 
+    const handleStatusUpdate = async (email) => {
+        try {
+            // API-Aufruf zum Setzen des Status auf true und Verwendung des Reservierungsdatums
+            const response = await axios.post(`${backend_url}/emails/${email.id}/status`, {
+                name: email.name,
+                userEmail: email.userEmail,
+                date: email.dateTime || email.date, // Sende das Reservierungsdatum oder als Fallback das Eingangsdatum
+            });
+
+            if (response.status === 200) {
+                // Erfolg: Setze den Status der E-Mail lokal auf true
+                const updatedEmails = emails.map(e =>
+                    e.id === email.id ? { ...e, status: true } : e
+                );
+                setEmails(updatedEmails);  // Aktualisiere den Zustand der E-Mails im Frontend
+            }
+        } catch (error) {
+            console.error('Fehler beim Aktualisieren des Status:', error);
+        }
+    };
+
+
+
     const formatEmailText = (text) => {
         const formattedText = text
             .replace(/Unbestätige Reservierungen ansehen\s*\[.*?\]/g, '')
@@ -207,7 +230,7 @@ const EmailList = () => {
                                             marginBottom: '6px',
                                             padding: '6px',
                                             backgroundColor: 'rgba(0,0,0,0.19)',
-                                            borderLeft: `5px solid ${'#B23C3CE5'}`,
+                                            borderLeft: `5px solid ${email.status ? '#B23C3CE5' : '#4CAF50'}`,
                                             margin: '0 6px',
                                             touchAction: 'pan-y'
                                         }}
@@ -295,6 +318,7 @@ const EmailList = () => {
                                                             <Typography
                                                                 variant="body1"
                                                                 component="a"
+                                                                onClick={() => handleStatusUpdate(email)}
                                                                 href={generateMailtoLink(
                                                                     email,
                                                                     'Annehmen: ',
@@ -311,6 +335,7 @@ const EmailList = () => {
                                                             <Typography
                                                                 variant="body1"
                                                                 component="a"
+                                                                onClick={() => handleStatusUpdate(email)}
                                                                 href={generateMailtoLink(
                                                                     email,
                                                                     'Ablehnen: ',

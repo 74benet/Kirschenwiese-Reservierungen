@@ -17,13 +17,16 @@ export class EmailDatabaseService {
     async saveEmail(email) {
         const client = await this.pool.connect(); // Verbindung zur DB herstellen
         try {
+            // Verwende das Reservierungsdatum (email.dateTime) oder das E-Mail-Eingangsdatum (email.date)
+            const reservationDate = email.dateTime || email.date;
+
             // Überprüfen, ob die E-Mail bereits in der Datenbank vorhanden ist
             const checkQuery = `
                 SELECT * FROM emails
                 WHERE email = $1 AND DATE(date) = DATE($2) AND persons = $3;
             `;
 
-            const checkResult = await client.query(checkQuery, [email.userEmail, email.date, email.persons]);
+            const checkResult = await client.query(checkQuery, [email.userEmail, reservationDate, email.persons]);
 
             // Wenn die E-Mail noch nicht existiert, füge sie in die Datenbank ein
             if (checkResult.rows.length === 0) {
@@ -36,7 +39,7 @@ export class EmailDatabaseService {
                     email.name,
                     email.persons,
                     email.userEmail,
-                    email.date,
+                    reservationDate, // Verwende hier das Reservierungsdatum
                     email.text,
                     email.hasReply, // Hier wird der Status gespeichert (ob die E-Mail beantwortet wurde)
                 ];

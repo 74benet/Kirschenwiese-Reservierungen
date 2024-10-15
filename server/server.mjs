@@ -14,8 +14,19 @@ import { ImapService } from './models/ImapService.mjs';
 import { EmailProcessor } from './models/EmailProcessor.mjs';
 import { EmailDatabaseService } from './db/DatabaseService.mjs';
 
+import pkg from 'pg';
+const { Pool } = pkg;
+
 // Laden der Umgebungsvariablen aus der .env-Datei (über den angegebenen Pfad)
 dotenv.config({ path: '../.env' });
+
+const pool = new Pool({
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: process.env.DB_PORT,
+});
 
 // Initialisierung der Express-Anwendung
 const app = express();
@@ -23,6 +34,8 @@ const port = process.env.PORT || 8080; // Port, auf dem der Server laufen soll
 
 // Hinzufügen von CORS-Middleware, um Cross-Origin-Anfragen zu erlauben
 app.use(cors());
+app.use(express.json());  // JSON-Parsing hinzufügen
+
 
 // Variable zum Speichern der E-Mails, die vom IMAP-Server abgerufen wurden
 let storedEmails = [];
@@ -115,6 +128,38 @@ app.post('/refresh-emails', async (req, res) => {
     await updateEmails(); // Abrufen der neuen E-Mails
     res.send({ message: 'E-Mails wurden aktualisiert' }); // Senden einer Bestätigung
 });
+
+// Backend-Route, um den Status einer E-Mail auf true zu setzen
+app.post('/emails/:id/status', async (req, res) => {
+    const { name, userEmail, date } = req.body;  // Werte aus dem Request-Body entnehmen
+
+    try {
+        // Ausgabe der übermittelten Werte zur Überprüfung
+        console.log('Updating email with name:', name, 'email:', userEmail, 'date:', date);
+
+        // Überprüfen, ob die E-Mail existiert und dann den Status auf true setzen
+        const updateQuery = `
+            UPDATE emails
+            SET status = true
+            WHERE name = $1 AND email = $2 AND DATE(date) = DATE($3)
+            RETURNING *;
+        `;
+        const result = await pool.query(updateQuery, [name, userEmail, date]);
+
+        // Ausgabe des Abfrageergebnisses zur Fehlerbehebung
+        console.log('Query result:', result);
+
+        if (result && result.rows && result.rows.length > 0) {
+            res.status(200).json(result.rows[0]);
+        } else {
+            res.status(404).json({ message: 'Email not found' });
+        }
+    } catch (err) {
+        console.error('Fehler beim Aktualisieren des Status:', err);
+        res.status(500).json({ message: 'Fehler beim Aktualisieren des Status' });
+    }
+});
+
 
 // Start des Servers, der auf dem angegebenen Port (Standard: 8080) läuft
 app.listen(port, '0.0.0.0', () => {

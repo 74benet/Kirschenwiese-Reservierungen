@@ -85,12 +85,15 @@ export class EmailProcessor {
 
                     const name = nameMatch ? nameMatch[1] : 'Unbekannt'; // Extrahierter Name oder 'Unbekannt'
                     const persons = personsMatch ? personsMatch[1] : 'Unbekannt'; // Anzahl der Personen oder 'Unbekannt'
-                    const dateTime = dateTimeMatch ? parseDate(dateTimeMatch[1]) : null; // Datum der Reservierung
+                    const dateTime = dateTimeMatch ? parseDate(dateTimeMatch[1]) : null; // Reservierungsdatum
                     const userEmail = userEmailMatch ? userEmailMatch[1] : 'Unbekannt'; // E-Mail-Adresse des Benutzers
-                    const date = parsed.date || new Date(); // Datum der E-Mail oder aktuelles Datum
+                    const emailDate = parsed.date || new Date(); // E-Mail-Eingangsdatum oder aktuelles Datum
+
+                    // Speichern wir das **Reservierungsdatum**, falls vorhanden. Sonst das Eingangsdatum.
+                    const dateToSave = dateTime || emailDate;
 
                     // Überprüfen, ob die E-Mail bereits in der Liste der verarbeiteten E-Mails enthalten ist (auf Basis von userEmail und dem gleichen Tag)
-                    const isDuplicate = emails.some(e => e.userEmail === userEmail && this.sameDay(e.date, date));
+                    const isDuplicate = emails.some(e => e.userEmail === userEmail && this.sameDay(e.dateTime || e.date, dateToSave));
 
                     // Wenn es eine neue Reservierungsanfrage ist und kein Duplikat vorliegt, füge sie der Liste der E-Mails hinzu
                     if (isOriginal && !isDuplicate) {
@@ -98,11 +101,11 @@ export class EmailProcessor {
                             id: seqno,
                             subject: parsed.subject,
                             from: parsed.from.text,
-                            date,
-                            formattedDate: formatDate(date),
+                            date: emailDate, // E-Mail-Datum für Referenz
+                            formattedDate: formatDate(emailDate), // Formatiertes Eingangsdatum
                             name,
                             persons,
-                            dateTime,
+                            dateTime: dateTime, // **Reservierungsdatum**, falls vorhanden
                             formattedDateTime: dateTime ? formatDate(dateTime) : 'N/A',
                             userEmail,
                             text: parsed.text,
@@ -119,14 +122,13 @@ export class EmailProcessor {
                         if (originalEmail) {
                             originalEmail.hasReply = true;
                         }
-                        // Verarbeitung anderer E-Mails, die keine Reservierungsanfragen sind
                     } else if (!isDuplicate) {
                         emails.push({
                             id: seqno,
                             subject: parsed.subject,
                             from: parsed.from.text,
-                            date,
-                            formattedDate: formatDate(date),
+                            date: emailDate,
+                            formattedDate: formatDate(emailDate),
                             text: parsed.text,
                             userEmail,
                             name: parsed.from.text,
@@ -147,5 +149,14 @@ export class EmailProcessor {
     // Methode zum Abrufen der verarbeiteten E-Mails
     getEmails() {
         return this.emails;
+    }
+
+    // Hilfsfunktion zum Vergleichen von zwei Daten, ob sie am gleichen Tag sind
+    sameDay(d1, d2) {
+        return (
+            d1.getFullYear() === d2.getFullYear() &&
+            d1.getMonth() === d2.getMonth() &&
+            d1.getDate() === d2.getDate()
+        );
     }
 }
