@@ -109,7 +109,7 @@ const fetchEmails = () => {
                                     const persons = personsMatch ? personsMatch[1] : 'Unbekannt';
                                     const dateTime = dateTimeMatch ? parseDate(dateTimeMatch[1]) : null;
                                     const userEmail = userEmailMatch ? userEmailMatch[1] : 'Unbekannt';
-                                    const date = parseDate(parsed.date) || new Date();
+                                    const date = parsed.date || new Date();
 
                                     if (isOriginal) {
                                         emails.push({
