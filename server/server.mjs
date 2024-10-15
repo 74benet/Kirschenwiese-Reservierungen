@@ -6,11 +6,13 @@
 // - dotenv: Zum Laden von Umgebungsvariablen aus einer .env-Datei
 // - ImapService: Klasse für die IMAP-Verbindung, um E-Mails abzurufen
 // - EmailProcessor: Klasse zur Verarbeitung von E-Mails
+// - EmailDatabaseService: Klasse zur einbindungen der Datenbank
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { ImapService } from './models/ImapService.mjs';
 import { EmailProcessor } from './models/EmailProcessor.mjs';
+import { EmailDatabaseService } from './db/DatabaseService.mjs';
 
 // Laden der Umgebungsvariablen aus der .env-Datei (über den angegebenen Pfad)
 dotenv.config({ path: '../.env' });
@@ -41,7 +43,10 @@ const imapConfig = {
 const imapService = new ImapService(imapConfig);
 // Instanz der EmailProcessor-Klasse, die für die Verarbeitung und Filterung der E-Mails verantwortlich ist
 const emailProcessor = new EmailProcessor();
+// TODO
+const emailDatabaseService = new EmailDatabaseService();
 
+// Funktion zum Abrufen und Aktualisieren der E-Mails
 // Funktion zum Abrufen und Aktualisieren der E-Mails
 const updateEmails = async () => {
     try {
@@ -61,9 +66,15 @@ const updateEmails = async () => {
         });
 
         // Sobald das Abrufen der E-Mails abgeschlossen ist
-        fetchStream.once('end', () => {
+        fetchStream.once('end', async () => {
             // Speichern der verarbeiteten E-Mails und Sortierung nach Datum
             storedEmails = emailProcessor.getEmails().sort((a, b) => b.date - a.date);
+
+            // Speichere die gefilterten E-Mails in der Datenbank
+            for (const email of storedEmails) {
+                await emailDatabaseService.saveEmail(email);  // Speichere jede E-Mail in der DB
+            }
+
             console.log('E-Mails wurden aktualisiert und gespeichert');
             // Schließen der IMAP-Verbindung
             imapService.closeConnection();
@@ -73,6 +84,7 @@ const updateEmails = async () => {
         console.error('Fehler beim Aktualisieren der E-Mails:', err);
     }
 };
+
 
 // Aufruf der Funktion, um die E-Mails beim Start des Servers zu aktualisieren
 updateEmails();

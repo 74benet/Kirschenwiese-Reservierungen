@@ -9,10 +9,31 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+    env_file:
+      - .env
 
   backend:
     build:
       context: ./server
       dockerfile: Dockerfile
     ports:
-      - "3002:3002"
+      - "8080:8080"
+    depends_on:
+      - db
+    env_file:
+      - .env
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+      POSTGRES_DB: ${PGDATABASE}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    env_file:
+      - .env
+volumes:
+  pgdata:

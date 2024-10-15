@@ -89,8 +89,11 @@ export class EmailProcessor {
                     const userEmail = userEmailMatch ? userEmailMatch[1] : 'Unbekannt'; // E-Mail-Adresse des Benutzers
                     const date = parsed.date || new Date(); // Datum der E-Mail oder aktuelles Datum
 
-                    // Wenn es eine neue Reservierungsanfrage ist, füge sie der Liste der E-Mails hinzu
-                    if (isOriginal) {
+                    // Überprüfen, ob die E-Mail bereits in der Liste der verarbeiteten E-Mails enthalten ist (auf Basis von userEmail und dem gleichen Tag)
+                    const isDuplicate = emails.some(e => e.userEmail === userEmail && this.sameDay(e.date, date));
+
+                    // Wenn es eine neue Reservierungsanfrage ist und kein Duplikat vorliegt, füge sie der Liste der E-Mails hinzu
+                    if (isOriginal && !isDuplicate) {
                         emails.push({
                             id: seqno,
                             subject: parsed.subject,
@@ -117,7 +120,7 @@ export class EmailProcessor {
                             originalEmail.hasReply = true;
                         }
                         // Verarbeitung anderer E-Mails, die keine Reservierungsanfragen sind
-                    } else {
+                    } else if (!isDuplicate) {
                         emails.push({
                             id: seqno,
                             subject: parsed.subject,

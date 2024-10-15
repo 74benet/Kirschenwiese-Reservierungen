@@ -1,12 +1,12 @@
 const path = require('path');
 
 module.exports = {
-    entry: './functions/server.js',
+    entry: './functions/server.mjs',
     target: 'node',
     mode: 'production',
     output: {
         path: path.resolve(__dirname, 'functions-build'),
-        filename: 'server.js',
+        filename: 'server.mjs',
         libraryTarget: 'commonjs2'
     },
     resolve: {
