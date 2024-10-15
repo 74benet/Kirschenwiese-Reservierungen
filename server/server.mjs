@@ -24,11 +24,37 @@ const imapConfig = {
     debug: console.log,
 };
 
+const germanToEnglishMonths = {
+    'Januar': 'January',
+    'Februar': 'February',
+    'März': 'March',
+    'April': 'April',
+    'Mai': 'May',
+    'Juni': 'June',
+    'Juli': 'July',
+    'August': 'August',
+    'September': 'September',
+    'Oktober': 'October',
+    'November': 'November',
+    'Dezember': 'December'
+};
+
 const parseDate = (dateString) => {
+    if (typeof dateString !== 'string') {
+        console.error('Ungültiger dateString:', dateString);
+        return null;
+    }
+
+    Object.keys(germanToEnglishMonths).forEach((germanMonth) => {
+        const englishMonth = germanToEnglishMonths[germanMonth];
+        dateString = dateString.replace(germanMonth, englishMonth);
+    });
+
     const parsedDate = new Date(dateString);
     if (!isNaN(parsedDate)) {
         return parsedDate;
     }
+    console.error('Ungültiges Datum nach dem Parsen:', dateString);
     return null;
 };
 
