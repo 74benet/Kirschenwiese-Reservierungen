@@ -1,222 +1,110 @@
+// server.mjs
+
+// Importieren von benötigten Modulen:
+// - express: Web-Framework für Node.js
+// - cors: Middleware, die Cross-Origin Resource Sharing (CORS) ermöglicht
+// - dotenv: Zum Laden von Umgebungsvariablen aus einer .env-Datei
+// - ImapService: Klasse für die IMAP-Verbindung, um E-Mails abzurufen
+// - EmailProcessor: Klasse zur Verarbeitung von E-Mails
 import express from 'express';
-import Imap from 'imap';
-import { simpleParser } from 'mailparser';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { ImapService } from './models/ImapService.mjs';
+import { EmailProcessor } from './models/EmailProcessor.mjs';
 
+// Laden der Umgebungsvariablen aus der .env-Datei (über den angegebenen Pfad)
 dotenv.config({ path: '../.env' });
 
+// Initialisierung der Express-Anwendung
 const app = express();
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 8080; // Port, auf dem der Server laufen soll
 
+// Hinzufügen von CORS-Middleware, um Cross-Origin-Anfragen zu erlauben
 app.use(cors());
 
+// Variable zum Speichern der E-Mails, die vom IMAP-Server abgerufen wurden
 let storedEmails = [];
 
+// Konfiguration für die IMAP-Verbindung (wird aus den Umgebungsvariablen geladen)
 const imapConfig = {
-    user: process.env.REACT_APP_USER,
-    password: process.env.REACT_APP_PASSWORD,
-    host: process.env.REACT_APP_HOST,
-    port: process.env.REACT_APP_PORT,
-    tls: true,
-    connTimeout: 30000,
-    authTimeout: 30000,
-    debug: console.log,
+    user: process.env.REACT_APP_USER,       // IMAP-Benutzername
+    password: process.env.REACT_APP_PASSWORD, // IMAP-Passwort
+    host: process.env.REACT_APP_HOST,       // IMAP-Host-Adresse
+    port: process.env.REACT_APP_PORT,       // IMAP-Port
+    tls: true,                              // TLS-Option für sichere Verbindung
+    connTimeout: 30000,                     // Timeout für Verbindungsaufbau
+    authTimeout: 30000,                     // Timeout für Authentifizierung
+    debug: console.log,                     // Debugging-Option (Protokollausgabe)
 };
 
-const germanToEnglishMonths = {
-    'Januar': 'January',
-    'Februar': 'February',
-    'März': 'March',
-    'April': 'April',
-    'Mai': 'May',
-    'Juni': 'June',
-    'Juli': 'July',
-    'August': 'August',
-    'September': 'September',
-    'Oktober': 'October',
-    'November': 'November',
-    'Dezember': 'December'
-};
+// Instanz der ImapService-Klasse, die die Verbindung zum IMAP-Server handhabt
+const imapService = new ImapService(imapConfig);
+// Instanz der EmailProcessor-Klasse, die für die Verarbeitung und Filterung der E-Mails verantwortlich ist
+const emailProcessor = new EmailProcessor();
 
-const parseDate = (dateString) => {
-    if (typeof dateString !== 'string') {
-        console.error('Ungültiger dateString:', dateString);
-        return null;
-    }
-
-    Object.keys(germanToEnglishMonths).forEach((germanMonth) => {
-        const englishMonth = germanToEnglishMonths[germanMonth];
-        dateString = dateString.replace(germanMonth, englishMonth);
-    });
-
-    const parsedDate = new Date(dateString);
-    if (!isNaN(parsedDate)) {
-        return parsedDate;
-    }
-    console.error('Ungültiges Datum nach dem Parsen:', dateString);
-    return null;
-};
-
-const formatDate = (date) => {
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${day}.${month}.${year} ${hours}:${minutes}`;
-};
-
-const fetchEmails = () => {
-    return new Promise((resolve, reject) => {
-        const imap = new Imap(imapConfig);
-
-        imap.once('ready', () => {
-            const threeMonthsAgo = new Date();
-            threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-
-            imap.openBox('INBOX', false, (err, box) => {
-                if (err) {
-                    return reject(err);
-                }
-
-                imap.search(['ALL', ['SINCE', threeMonthsAgo]], (err, results) => {
-                    if (err) {
-                        return reject(err);
-                    }
-                    if (results.length === 0) {
-                        imap.end();
-                        return resolve([]);
-                    }
-                    const fetch = imap.fetch(results, { bodies: '' });
-                    const emails = [];
-
-                    fetch.on('message', (msg, seqno) => {
-                        msg.on('body', async (stream, info) => {
-                            try {
-                                const parsed = await simpleParser(stream);
-                                const isOriginal = parsed.subject.includes('Neue Reservierungsanfrage') && !parsed.subject.startsWith('AW:');
-                                const isReply = parsed.subject.startsWith('AW:');
-
-                                if (isOriginal || isReply) {
-                                    const text = parsed.text;
-                                    const nameMatch = text.match(/Auf den Namen:\s*(.*)/);
-                                    const personsMatch = text.match(/Für:\s*(\d+)\s*Personen/);
-                                    const dateTimeMatch = text.match(/Am.\s*(.*)/);
-                                    const userEmailMatch = text.match(/Von:\s*(.*)/);
-
-                                    const name = nameMatch ? nameMatch[1] : 'Unbekannt';
-                                    const persons = personsMatch ? personsMatch[1] : 'Unbekannt';
-                                    const dateTime = dateTimeMatch ? parseDate(dateTimeMatch[1]) : null;
-                                    const userEmail = userEmailMatch ? userEmailMatch[1] : 'Unbekannt';
-                                    const date = parsed.date || new Date();
-
-                                    if (isOriginal) {
-                                        emails.push({
-                                            id: seqno,
-                                            subject: parsed.subject,
-                                            from: parsed.from.text,
-                                            date,
-                                            formattedDate: formatDate(date),
-                                            name,
-                                            persons,
-                                            dateTime,
-                                            formattedDateTime: dateTime ? formatDate(dateTime) : 'N/A',
-                                            userEmail,
-                                            text: parsed.text,
-                                            hasReply: false,
-                                        });
-                                    } else if (isReply) {
-                                        const originalEmail = emails.find(email =>
-                                            email.subject.includes('Neue Reservierungsanfrage') &&
-                                            email.name === name &&
-                                            email.persons === persons &&
-                                            email.dateTime && dateTime && email.dateTime.getTime() === dateTime.getTime()
-                                        );
-                                        if (originalEmail) {
-                                            originalEmail.hasReply = true;
-                                        }
-                                    } else {
-                                        emails.push({
-                                            id: seqno,
-                                            subject: parsed.subject,
-                                            from: parsed.from.text,
-                                            date,
-                                            formattedDate: formatDate(date),
-                                            text: parsed.text,
-                                            userEmail,
-                                            name: parsed.from.text,
-                                            persons: 'N/A',
-                                            dateTime: null,
-                                            formattedDateTime: 'N/A',
-                                            hasReply: false,
-                                        });
-                                    }
-                                }
-                            } catch (err) {
-                                console.error('Fehler beim Parsen der Nachricht:', err);
-                            }
-                        });
-                    });
-
-                    fetch.once('error', (err) => {
-                        reject(err);
-                    });
-
-                    fetch.once('end', () => {
-                        emails.sort((a, b) => b.date - a.date);
-                        imap.end();
-                        resolve(emails);
-                    });
-                });
-            });
-        });
-
-        imap.once('error', (err) => {
-            reject(err);
-        });
-
-        imap.once('end', () => {
-            console.log('Verbindung beendet');
-        });
-
-        imap.connect();
-    });
-};
-
+// Funktion zum Abrufen und Aktualisieren der E-Mails
 const updateEmails = async () => {
     try {
-        storedEmails = await fetchEmails();
-        console.log('E-Mails wurden aktualisiert und gespeichert');
+        // Verbindung zum IMAP-Server herstellen
+        await imapService.connect();
+
+        // Bestimmen des Datums vor drei Monaten für die E-Mail-Suche
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+        // Abrufen der E-Mails vom IMAP-Server, die in den letzten drei Monaten empfangen wurden
+        const fetchStream = await imapService.fetchEmails(threeMonthsAgo);
+
+        // Verarbeitung jeder E-Mail-Nachricht
+        fetchStream.on('message', (msg, seqno) => {
+            emailProcessor.processMessage(msg, seqno); // Verarbeiten der Nachricht über EmailProcessor
+        });
+
+        // Sobald das Abrufen der E-Mails abgeschlossen ist
+        fetchStream.once('end', () => {
+            // Speichern der verarbeiteten E-Mails und Sortierung nach Datum
+            storedEmails = emailProcessor.getEmails().sort((a, b) => b.date - a.date);
+            console.log('E-Mails wurden aktualisiert und gespeichert');
+            // Schließen der IMAP-Verbindung
+            imapService.closeConnection();
+        });
     } catch (err) {
+        // Fehlerbehandlung für den Fall, dass beim Abrufen oder Verarbeiten der E-Mails ein Fehler auftritt
         console.error('Fehler beim Aktualisieren der E-Mails:', err);
     }
 };
 
+// Aufruf der Funktion, um die E-Mails beim Start des Servers zu aktualisieren
 updateEmails();
 
+// GET-Route zum Abrufen der E-Mails
 app.get('/emails', (req, res) => {
-    const { sortBy } = req.query;
-    let sortedEmails = [...storedEmails];
+    const { sortBy } = req.query; // Überprüfung, ob eine Sortierung angefordert wurde
+    let sortedEmails = [...storedEmails]; // Kopieren der gespeicherten E-Mails
 
+    // Falls die Sortierung nach Reservierungsdatum angefragt wurde
     if (sortBy === 'reservationDate') {
         sortedEmails.sort((a, b) => {
             const dateA = a.dateTime ? new Date(a.dateTime) : new Date(a.date);
             const dateB = b.dateTime ? new Date(b.dateTime) : new Date(b.date);
-            return dateB - dateA;
+            return dateB - dateA; // Sortieren nach Reservierungsdatum
         });
     } else {
+        // Standard-Sortierung nach E-Mail-Datum
         sortedEmails.sort((a, b) => b.date - a.date);
     }
 
+    // Rückgabe der sortierten E-Mails als Antwort
     res.send(sortedEmails);
 });
 
+// POST-Route zum manuellen Aktualisieren der E-Mails
 app.post('/refresh-emails', async (req, res) => {
-    await updateEmails();
-    res.send({ message: 'E-Mails wurden aktualisiert' });
+    await updateEmails(); // Abrufen der neuen E-Mails
+    res.send({ message: 'E-Mails wurden aktualisiert' }); // Senden einer Bestätigung
 });
 
+// Start des Servers, der auf dem angegebenen Port (Standard: 8080) läuft
 app.listen(port, '0.0.0.0', () => {
     console.log(`Server läuft auf Port ${port}`);
 });
