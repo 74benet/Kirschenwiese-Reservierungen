@@ -24,49 +24,27 @@ import {
     FormControl,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
+import {Reorder, Visibility} from "@mui/icons-material";
 
 const customTheme = createTheme({
     components: {
         MuiOutlinedInput: {
             styleOverrides: {
                 root: {
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#fef3e3',
-                    },
-                    color: '#fef3e3',
-                },
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#FFCC00', // Custom hover color
-                },
-                notchedOutline: {
-                    borderColor: '#fef3e3',
-                },
-            },
-        },
-        MuiSelect: {
-            styleOverrides: {
-                icon: {
-                    color: '#fef3e3',
-                },
-                select: {
-                    '&:focus': {
-                        backgroundColor: 'transparent',
+                    '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'white', // Weißer Rand im Idle-Zustand
                     },
                     '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#FFCC00', // Custom hover color for Select
+                        borderColor: '#FFCC00', // Optional: anderer Hover-Farbton
                     },
-                },
-            },
-        },
-        MuiInputLabel: {
-            styleOverrides: {
-                root: {
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#fef3e3', // Beim Fokus
+                    },
                     color: '#fef3e3',
                 },
             },
@@ -78,18 +56,18 @@ const backend_url = process.env.REACT_APP_BACKEND_URL;
 const EmailList = () => {
     const [emails, setEmails] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [currentPage, setCurrentPage] = useState(1);
     const [selectedEmail, setSelectedEmail] = useState(null);
-    const [sortBy, setSortBy] = useState('receivedDate');
+    const [sortBy, setSortBy] = useState('input');
     const emailsPerPage = 10;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
 
     const fetchEmails = useCallback(async () => {
         try {
             setLoading(true);
             const response = await axios.get(`${backend_url}/emails?sortBy=${sortBy}`);
-            setEmails(response.data);
+            setEmails(response.data); // Die Datenbankantwort wird hier übernommen
         } catch (error) {
             console.error('Error fetching emails:', error);
         } finally {
@@ -109,21 +87,18 @@ const EmailList = () => {
         fetchEmails();
     };
 
-    const indexOfLastEmail = currentPage * emailsPerPage;
-    const indexOfFirstEmail = indexOfLastEmail - emailsPerPage;
-    const currentEmails = emails.slice(indexOfFirstEmail, indexOfLastEmail);
-
-    const paginate = (pageNumber) => {
-        setCurrentPage(pageNumber);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
     const generateMailtoLink = (email, subjectPrefix, body) => {
-        return `mailto:${email.userEmail}?subject=${encodeURIComponent(subjectPrefix + email.subject)}&body=${encodeURIComponent(body)}`;
+        return `mailto:${email.email}?subject=${(subjectPrefix + "Reservierung Pizzeria Kirschenwiese")}&body=${encodeURIComponent(body)}`;
     };
 
-    const isStandardReservation = (email) => {
-        return email.text.includes('Auf den Namen:') && email.text.includes('Für:') && email.text.includes('Am.');
+    const formatDate = (date) => {
+        return new Date(date).toLocaleString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     };
 
     const handleViewFullEmail = (email) => {
@@ -134,13 +109,14 @@ const EmailList = () => {
         setSelectedEmail(null);
     };
 
-    const handleStatusUpdate = async (email) => {
+    const handleStatusUpdate = async (email, status) => {
         try {
             // API-Aufruf zum Setzen des Status auf true und Verwendung des Reservierungsdatums
             const response = await axios.post(`${backend_url}/emails/${email.id}/status`, {
                 name: email.name,
-                userEmail: email.userEmail,
+                persons: email.persons,
                 date: email.dateTime || email.date, // Sende das Reservierungsdatum oder als Fallback das Eingangsdatum
+                status: status
             });
 
             if (response.status === 200) {
@@ -155,16 +131,26 @@ const EmailList = () => {
         }
     };
 
+    const handleMarkAsUnread = async (email, status ) => {
+        try {
+            // API-Aufruf zum Setzen des Status auf false
+            const response = await axios.post(`${backend_url}/emails/${email.id}/status`, {
+                name: email.name,
+                persons: email.persons,
+                date: email.dateTime || email.date, // Sende das Reservierungsdatum oder als Fallback das Eingangsdatum
+                status: status
+            });
 
-
-    const formatEmailText = (text) => {
-        const formattedText = text
-            .replace(/Unbestätige Reservierungen ansehen\s*\[.*?\]/g, '')
-            .replace(/Diese Reservierung bestätigen\s*\[.*?\]/g, '')
-            .replace(/Reservierung ablehnen\s*\[.*?\]/g, '')
-            .replace("Diese Mitteilung wurde von Kirschenwiese Restaurant Heilbronn-Abstatt\n" +
-                "[https://pizzeria-kirschenwiese.de/]", '')
-        return formattedText;
+            if (response.status === 200) {
+                // Erfolg: Setze den Status der E-Mail lokal auf false
+                const updatedEmails = emails.map(e =>
+                    e.id === email.id ? { ...e, status: false } : e
+                );
+                setEmails(updatedEmails);  // Aktualisiere den Zustand der E-Mails im Frontend
+            }
+        } catch (error) {
+            console.error('Fehler beim Setzen des Status auf Ungelesen:', error);
+        }
     };
 
     return (
@@ -174,42 +160,89 @@ const EmailList = () => {
                     src={`${process.env.PUBLIC_URL}/logo-shadow.png`}
                     alt="Logo"
                     style={{ height: '200px', width: 'auto', cursor: 'pointer' }}
-                    onClick={() => setCurrentPage(1)}
+                    onClick={() => fetchEmails()}
                 />
                 <Box display="flex" justifyContent="center" alignItems="center" mb={2} width={isMobile ? '90%' : '92%'}>
                     <IconButton
                         variant="contained"
                         color="primary"
                         onClick={handleUpdateEmails}
-                        style={{
+                        sx={{
                             backgroundColor: 'white',
                             color: '#333',
                             marginRight: '10px',
                             fontSize: '1rem',
                             fontWeight: 'bold',
+                            '&:hover': {
+                                backgroundColor: 'white',
+                                color: '#FFCC00',
+                            },
                         }}
                     >
-                        <RefreshIcon fontSize="large" />
+                        <RefreshIcon
+                            fontSize="large"
+                            sx={{
+                                '&:hover': {
+                                    color: '#FFCC00',
+                                },
+                            }}
+                        />
                     </IconButton>
                     <FormControl variant="outlined" fullWidth>
                         <Select
                             value={sortBy}
                             onChange={handleSortChange}
-                            style={{ color: '#fef3e3', fontSize: '1.2rem', fontWeight: 'bold' }}
+                            style={{fontSize: '1.2rem', fontWeight: 'bold' }}
+                            sx={{
+                                color: 'white',
+                                '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: 'white',
+                                },
+                                '&:hover .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: 'white',
+                                },
+                                '&:hover': {
+                                    color: '#FFCC00',
+                                },
+                                '& .MuiSvgIcon-root': {
+                                    color: 'inherit',
+                                },
+                            }}
                         >
-                            <MenuItem value="receivedDate" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>Eingangsdatum</MenuItem>
-                            <MenuItem value="reservationDate" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>Reservierungsdatum</MenuItem>
+                            <MenuItem
+                                value="input"
+                                sx={{
+                                    fontSize: '1.2rem',
+                                    fontWeight: 'bold',
+                                    '&:hover': {
+                                        color: '#FFCC00', // Gelber Text beim Hover auf Menü-Items
+                                    }
+                                }}
+                            >
+                                Eingangsdatum
+                            </MenuItem>
+                            <MenuItem
+                                value="date"
+                                sx={{
+                                    fontSize: '1.2rem',
+                                    fontWeight: 'bold',
+                                    '&:hover': {
+                                        color: '#FFCC00', // Gelber Text beim Hover auf Menü-Items
+                                    }
+                                }}
+                            >
+                                Reservierungsdatum
+                            </MenuItem>
                         </Select>
                     </FormControl>
+
                 </Box>
                 <Container>
                     {loading ? (
                         <Box display="flex" justifyContent="center" my={2}>
                             <Fade
                                 in={loading}
-                                style={{
-                                    transitionDelay: loading ? '800ms' : '0ms',
-                                }}
+                                style={{ transitionDelay: loading ? '800ms' : '0ms' }}
                                 unmountOnExit
                             >
                                 <CircularProgress
@@ -222,16 +255,16 @@ const EmailList = () => {
                         </Box>
                     ) : (
                         <Box>
-                            {currentEmails.map((email, index) => (
+                            {emails.map((email, index) => (
                                 <Zoom in={!loading} key={index}>
                                     <Paper
                                         elevation={3}
                                         style={{
-                                            marginBottom: '6px',
+                                            marginBottom: '10px',
                                             padding: '6px',
                                             backgroundColor: 'rgba(0,0,0,0.19)',
-                                            borderLeft: `5px solid ${email.status ? '#B23C3CE5' : '#4CAF50'}`,
-                                            margin: '0 6px',
+                                            borderLeft: email.status ? '5px solid #B23C3CE5' : '5px solid #4CAF50', // Rot wenn Status true, Grün sonst
+                                            margin: '10px',
                                             touchAction: 'pan-y'
                                         }}
                                     >
@@ -257,142 +290,122 @@ const EmailList = () => {
                                                             {email.name}
                                                         </Typography>
                                                     </Grid>
-                                                    {isStandardReservation(email) ? (
-                                                        <>
-                                                            <Grid item xs={12}>
-                                                                <Typography
-                                                                    variant="body1"
-                                                                    component="div"
-                                                                    align="left"
-                                                                    style={{
-                                                                        fontWeight: 'bold',
-                                                                        color: 'rgba(178,91,60,0.9)',
-                                                                        textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)',
-                                                                    }}
-                                                                >
-                                                                    {email.persons} Personen
-                                                                </Typography>
-                                                            </Grid>
-                                                            <Grid item xs={12}>
-                                                                <Typography
-                                                                    variant="body1"
-                                                                    component="div"
-                                                                    align="left"
-                                                                    style={{
-                                                                        fontWeight: 'bold',
-                                                                        color: 'rgba(178,137,60,0.9)',
-                                                                        textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)',
-                                                                    }}
-                                                                >
-                                                                    {email.formattedDateTime}
-                                                                </Typography>
-                                                            </Grid>
-                                                        </>
-                                                    ) : (
-                                                        <Grid item xs={12}>
-                                                            <Typography
-                                                                variant="body1"
-                                                                component="div"
-                                                                align="left"
-                                                                style={{
-                                                                    fontWeight: 'bold',
-                                                                    color: '#B23C3CE5',
-                                                                    textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)',
-                                                                }}
-                                                            >
-                                                                Frage
-                                                            </Typography>
-                                                        </Grid>
-                                                    )}
+                                                    <Grid item xs={12}>
+                                                        <Typography
+                                                            variant="body1"
+                                                            component="div"
+                                                            align="left"
+                                                            style={{
+                                                                fontWeight: 'bold',
+                                                                color: 'rgba(178,91,60,0.9)',
+                                                                textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)',
+                                                            }}
+                                                        >
+                                                            {email.persons} Personen
+                                                        </Typography>
+                                                    </Grid>
+                                                    <Grid item xs={12}>
+                                                        <Typography
+                                                            variant="body1"
+                                                            component="div"
+                                                            align="left"
+                                                            style={{
+                                                                fontWeight: 'bold',
+                                                                color: 'rgba(178,137,60,0.9)',
+                                                                textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)',
+                                                            }}
+                                                        >
+                                                            {formatDate(email.date)} {/* Reservierungsdatum */}
+                                                        </Typography>
+                                                    </Grid>
                                                     <Grid item xs={12}>
                                                         <Typography variant="body2" color="textSecondary" component="div" align="left">
-                                                            {email.formattedDate}
+                                                            {formatDate(email.input)} {/* Eingangsdatum */}
                                                         </Typography>
                                                     </Grid>
                                                 </Grid>
                                             </AccordionSummary>
                                             <AccordionDetails>
                                                 <Box display="flex" flexDirection="column">
-                                                    {isStandardReservation(email) ? (
-                                                        <>
-                                                            <Typography
-                                                                variant="body1"
-                                                                component="a"
-                                                                onClick={() => handleStatusUpdate(email)}
-                                                                href={generateMailtoLink(
-                                                                    email,
-                                                                    'Annehmen: ',
-                                                                    `Ihre Reservierung für ${email.persons} Personen am ${email.formattedDateTime} ist angenommen.\n\nMit freundlichen Grüßen,\nPizzeria Kirschenwiese`
-                                                                )}
-                                                                style={{
-                                                                    color: theme.palette.primary.main,
-                                                                    textDecoration: 'none',
-                                                                    marginBottom: '8px',
-                                                                }}
-                                                            >
-                                                                Annehmen
-                                                            </Typography>
-                                                            <Typography
-                                                                variant="body1"
-                                                                component="a"
-                                                                onClick={() => handleStatusUpdate(email)}
-                                                                href={generateMailtoLink(
-                                                                    email,
-                                                                    'Ablehnen: ',
-                                                                    `Ihre Reservierung für ${email.persons} Personen am ${email.formattedDateTime} ist abgelehnt.\n\nMit freundlichen Grüßen,\nPizzeria Kirschenwiese`
-                                                                )}
-                                                                style={{
-                                                                    color: theme.palette.error.main,
-                                                                    textDecoration: 'none',
-                                                                }}
-                                                            >
-                                                                Ablehnen
-                                                            </Typography>
-                                                            <Button
-                                                                variant="outlined"
-                                                                color="primary"
-                                                                onClick={() => handleViewFullEmail(email)}
-                                                                style={{ marginTop: '8px' }}
-                                                            >
-                                                                Ganze Nachricht ansehen
-                                                            </Button>
-                                                        </>
-                                                    ) : (
-                                                        <Typography variant="body1" component="p">
-                                                            {email.text}
-                                                        </Typography>
-                                                    )}
+                                                    <Box display="flex" justifyContent="space-between" mb={2}>
+                                                        <Button
+                                                            variant="contained"
+                                                            color="success"
+                                                            onClick={() => handleStatusUpdate(email, true)}
+                                                            href={generateMailtoLink(
+                                                                email,
+                                                                'Angenommen: ',
+                                                                `Ihre Reservierung für ${email.persons} Personen am ${formatDate(email.date)} wurde angenommen.\n\nMit freundlichen Grüßen,\nPizzeria Kirschenwiese`
+                                                            )}
+                                                            style={{
+                                                                color: 'white',
+                                                                textDecoration: 'none',
+                                                                minHeight: '50px',
+                                                                width: '48%',
+                                                            }}
+                                                            startIcon={<CheckIcon style={{ color: 'white' }} />}
+                                                            fullWidth
+                                                        >
+                                                            Annehmen
+                                                        </Button>
+
+                                                        <Button
+                                                            variant="contained"
+                                                            color="error"
+                                                            onClick={() => handleStatusUpdate(email, false)}
+                                                            href={generateMailtoLink(
+                                                                email,
+                                                                'Ablehnen: ',
+                                                                `Ihre Reservierung für ${email.persons} Personen am ${formatDate(email.date)} ist abgelehnt.\n\nMit freundlichen Grüßen,\nPizzeria Kirschenwiese`
+                                                            )}
+                                                            style={{
+                                                                color: 'white',
+                                                                textDecoration: 'none',
+                                                                minHeight: '50px',
+                                                                width: '48%',
+                                                            }}
+                                                            startIcon={<CloseIcon style={{ color: 'white' }} />}
+                                                            fullWidth
+                                                        >
+                                                            Ablehnen
+                                                        </Button>
+                                                    </Box>
+                                                    <Button
+                                                        variant="contained"
+                                                        color="secondary"
+                                                        onClick={() => handleMarkAsUnread(email,false)}
+                                                        startIcon={<Visibility style={{ color: 'white' }} />}
+                                                        style={{
+                                                            backgroundColor: 'rgb(185,87,185)',  // Blasseres Lila für "Ungelesen Markieren"
+                                                            color: 'white',
+                                                            textDecoration: 'none',
+                                                            minHeight: '25px',
+                                                            marginTop: '8px'
+                                                        }}
+                                                    >
+                                                        Ungelesen Markieren
+                                                    </Button>
+                                                    <Button
+                                                        variant="contained"
+                                                        color="primary"
+                                                        onClick={() => handleViewFullEmail(email)}
+                                                        startIcon={<Reorder style={{ color: 'white' }} />}
+                                                        style={{
+                                                            backgroundColor: 'rgb(94,172,234)',  // Blasseres Blau für "Ganze Nachricht Ansehen"
+                                                            color: 'white',
+                                                            textDecoration: 'none',
+                                                            minHeight: '25px',
+                                                            marginTop: '8px'
+                                                        }}
+                                                    >
+                                                        Ganze Nachricht ansehen
+                                                    </Button>
                                                 </Box>
                                             </AccordionDetails>
                                         </Accordion>
                                     </Paper>
                                 </Zoom>
                             ))}
-                            <Box display="flex" justifyContent="center" alignItems="center" my={2}>
-                                <IconButton
-                                    onClick={() => paginate(currentPage - 1)}
-                                    disabled={currentPage === 1}
-                                    aria-label="previous page"
-                                    style={{ color: 'white', fontSize: '24px' }}
-                                >
-                                    <ArrowBackIcon fontSize="large" />
-                                </IconButton>
-                                <Typography
-                                    variant="h4"
-                                    mx={2}
-                                    style={{ color: 'white', fontWeight: 'bold', textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)' }}
-                                >
-                                    {currentPage}
-                                </Typography>
-                                <IconButton
-                                    onClick={() => paginate(currentPage + 1)}
-                                    disabled={currentPage === Math.ceil(emails.length / emailsPerPage)}
-                                    aria-label="next page"
-                                    style={{ color: 'white', fontSize: '24px' }}
-                                >
-                                    <ArrowForwardIcon fontSize="large" />
-                                </IconButton>
-                            </Box>
                         </Box>
                     )}
                 </Container>
@@ -401,7 +414,7 @@ const EmailList = () => {
                     <DialogContent dividers>
                         {selectedEmail && (
                             <Typography variant="body1" component="div" style={{ whiteSpace: 'pre-wrap' }}>
-                                {formatEmailText(selectedEmail.text)}
+                                {selectedEmail.text}
                             </Typography>
                         )}
                     </DialogContent>

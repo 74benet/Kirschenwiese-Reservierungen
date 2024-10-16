@@ -15,33 +15,31 @@ export class EmailDatabaseService {
 
     // Methode zum Speichern von E-Mails in die Datenbank
     async saveEmail(email) {
-        const client = await this.pool.connect(); // Verbindung zur DB herstellen
+        const client = await this.pool.connect();
         try {
-            // Verwende das Reservierungsdatum (email.dateTime) oder das E-Mail-Eingangsdatum (email.date)
-            const reservationDate = email.dateTime || email.date;
-
             // Überprüfen, ob die E-Mail bereits in der Datenbank vorhanden ist
             const checkQuery = `
-                SELECT * FROM emails
-                WHERE email = $1 AND DATE(date) = DATE($2) AND persons = $3;
-            `;
+            SELECT * FROM emails
+            WHERE email = $1 AND DATE(date) = DATE($2) AND persons = $3;
+        `;
 
-            const checkResult = await client.query(checkQuery, [email.userEmail, reservationDate, email.persons]);
+            const checkResult = await client.query(checkQuery, [email.userEmail, email.dateTime, email.persons]);
 
             // Wenn die E-Mail noch nicht existiert, füge sie in die Datenbank ein
             if (checkResult.rows.length === 0) {
                 const insertQuery = `
-                    INSERT INTO emails (name, persons, email, date, text, status)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    RETURNING *;
-                `;
+                INSERT INTO emails (name, persons, email, date, text, status, input)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING *;
+            `;
                 const values = [
                     email.name,
                     email.persons,
                     email.userEmail,
-                    reservationDate, // Verwende hier das Reservierungsdatum
+                    email.dateTime,   // Reservierungsdatum
                     email.text,
-                    email.hasReply, // Hier wird der Status gespeichert (ob die E-Mail beantwortet wurde)
+                    email.hasReply,   // Status, ob die E-Mail beantwortet wurde
+                    email.date        // Eingangsdatum als 'input'
                 ];
                 const insertResult = await client.query(insertQuery, values);
                 console.log('Neue E-Mail wurde gespeichert:', insertResult.rows[0]);

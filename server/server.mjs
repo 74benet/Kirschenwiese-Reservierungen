@@ -103,25 +103,23 @@ const updateEmails = async () => {
 updateEmails();
 
 // GET-Route zum Abrufen der E-Mails
-app.get('/emails', (req, res) => {
-    const { sortBy } = req.query; // Überprüfung, ob eine Sortierung angefordert wurde
-    let sortedEmails = [...storedEmails]; // Kopieren der gespeicherten E-Mails
-
-    // Falls die Sortierung nach Reservierungsdatum angefragt wurde
-    if (sortBy === 'reservationDate') {
-        sortedEmails.sort((a, b) => {
-            const dateA = a.dateTime ? new Date(a.dateTime) : new Date(a.date);
-            const dateB = b.dateTime ? new Date(b.dateTime) : new Date(b.date);
-            return dateB - dateA; // Sortieren nach Reservierungsdatum
-        });
-    } else {
-        // Standard-Sortierung nach E-Mail-Datum
-        sortedEmails.sort((a, b) => b.date - a.date);
+app.get('/emails', async (req, res) => {
+    try {
+        const query = `
+            SELECT id, name, persons, email, date, text, status, input
+            FROM emails
+            ORDER BY input DESC;
+        `;
+        const result = await pool.query(query);
+        // Rückgabe der E-Mails als JSON
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Fehler beim Abrufen der E-Mails:', err);
+        res.status(500).json({ message: 'Fehler beim Abrufen der E-Mails' });
     }
-
-    // Rückgabe der sortierten E-Mails als Antwort
-    res.send(sortedEmails);
 });
+
+
 
 // POST-Route zum manuellen Aktualisieren der E-Mails
 app.post('/refresh-emails', async (req, res) => {
@@ -131,25 +129,23 @@ app.post('/refresh-emails', async (req, res) => {
 
 // Backend-Route, um den Status einer E-Mail auf true zu setzen
 app.post('/emails/:id/status', async (req, res) => {
-    const { name, userEmail, date } = req.body;  // Werte aus dem Request-Body entnehmen
+    const { name, persons, date, status  } = req.body;
 
     try {
-        // Ausgabe der übermittelten Werte zur Überprüfung
-        console.log('Updating email with name:', name, 'email:', userEmail, 'date:', date);
+        console.log('Updating email with name:', name, 'persons:', persons, 'date:', date);
 
-        // Überprüfen, ob die E-Mail existiert und dann den Status auf true setzen
+        // SQL-Abfrage, um die E-Mail zu aktualisieren
         const updateQuery = `
             UPDATE emails
-            SET status = true
-            WHERE name = $1 AND email = $2 AND DATE(date) = DATE($3)
+            SET status = $4  -- Status dynamisch setzen
+            WHERE name = $1 AND persons = $2 AND DATE(date) = DATE($3)
             RETURNING *;
         `;
-        const result = await pool.query(updateQuery, [name, userEmail, date]);
+        const result = await pool.query(updateQuery, [name, persons, date, status]);
 
-        // Ausgabe des Abfrageergebnisses zur Fehlerbehebung
         console.log('Query result:', result);
 
-        if (result && result.rows && result.rows.length > 0) {
+        if (result && result.rows.length > 0) {
             res.status(200).json(result.rows[0]);
         } else {
             res.status(404).json({ message: 'Email not found' });
@@ -159,6 +155,7 @@ app.post('/emails/:id/status', async (req, res) => {
         res.status(500).json({ message: 'Fehler beim Aktualisieren des Status' });
     }
 });
+
 
 
 // Start des Servers, der auf dem angegebenen Port (Standard: 8080) läuft

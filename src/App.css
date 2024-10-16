@@ -7,7 +7,7 @@ html, body {
 }
 
 .background {
-  background: linear-gradient(135deg, rgba(241, 147, 100, 0.9), rgba(178, 60, 60, 0.9)), url('/public/background.png');
+  background: linear-gradient(95deg, rgba(241, 147, 100, 0.9), rgba(178, 60, 60, 0.9)), url('/public/background.png');
   background-size: auto, auto; /* Ensure the gradient covers the entire area and the pattern repeats */
   background-repeat: no-repeat, repeat; /* No repeat for the gradient, repeat for the pattern */
   background-blend-mode: normal;

@@ -140,8 +140,7 @@ export class EmailProcessor {
                     }
                 }
             } catch (err) {
-                // Fehlerbehandlung für den Fall, dass beim Parsen der Nachricht ein Fehler auftritt
-                console.error('Fehler beim Parsen der Nachricht:', err);
+
             }
         });
     }
