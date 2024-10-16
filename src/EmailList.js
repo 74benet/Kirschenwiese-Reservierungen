@@ -173,64 +173,44 @@ const EmailList = () => {
                             marginRight: '10px',
                             fontSize: '1rem',
                             fontWeight: 'bold',
+                            transition: 'all 0.3s ease-in-out',
                             '&:hover': {
-                                backgroundColor: 'white',
-                                color: '#FFCC00',
+                                boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.5)',
+                                transform: 'translateY(-2px)',
+                                color: 'rgba(255, 235, 0, 0.8)',
+                                backgroundColor: 'rgba(255, 255, 255, 1)',
                             },
                         }}
                     >
-                        <RefreshIcon
-                            fontSize="large"
-                            sx={{
-                                '&:hover': {
-                                    color: '#FFCC00',
-                                },
-                            }}
-                        />
+                        <RefreshIcon fontSize="large" />
                     </IconButton>
-                    <FormControl variant="outlined" fullWidth>
+
+                    <FormControl
+                        variant="outlined"
+                        fullWidth
+                        sx={{
+                            transition: 'all 0.3s ease-in-out',
+                            '&:hover': {
+                                boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.5)',
+                                transform: 'translateY(-2px)',
+                            },
+                            '& .MuiInputBase-input': {
+                                color: 'white',
+                            },
+                            '& .MuiInputBase-input:hover': {
+                                color: 'rgb(255,255,255)',
+                            },
+                        }}
+                    >
                         <Select
                             value={sortBy}
                             onChange={handleSortChange}
-                            style={{fontSize: '1.2rem', fontWeight: 'bold' }}
-                            sx={{
-                                color: 'white',
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'white',
-                                },
-                                '&:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'white',
-                                },
-                                '&:hover': {
-                                    color: '#FFCC00',
-                                },
-                                '& .MuiSvgIcon-root': {
-                                    color: 'inherit',
-                                },
-                            }}
+                            style={{ color: '#fef3e3', fontSize: '1.2rem', fontWeight: 'bold' }}
                         >
-                            <MenuItem
-                                value="input"
-                                sx={{
-                                    fontSize: '1.2rem',
-                                    fontWeight: 'bold',
-                                    '&:hover': {
-                                        color: '#FFCC00', // Gelber Text beim Hover auf Menü-Items
-                                    }
-                                }}
-                            >
+                            <MenuItem value="input" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
                                 Eingangsdatum
                             </MenuItem>
-                            <MenuItem
-                                value="date"
-                                sx={{
-                                    fontSize: '1.2rem',
-                                    fontWeight: 'bold',
-                                    '&:hover': {
-                                        color: '#FFCC00', // Gelber Text beim Hover auf Menü-Items
-                                    }
-                                }}
-                            >
+                            <MenuItem value="date" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
                                 Reservierungsdatum
                             </MenuItem>
                         </Select>
@@ -268,7 +248,15 @@ const EmailList = () => {
                                             touchAction: 'pan-y'
                                         }}
                                     >
-                                        <Accordion>
+                                        <Accordion
+                                            sx={{
+                                                transition: 'all 0.3s ease-in-out', // Für eine sanfte Animation
+                                                '&:hover': {
+                                                    boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.5)', // Leichter gelber Glanz beim Hover
+                                                    transform: 'translateY(-2px)', // Leichtes Anheben beim Hover
+                                                },
+                                            }}
+                                        >
                                             <AccordionSummary
                                                 expandIcon={<ExpandMoreIcon style={{ color: '#B23C3CE5' }} />}
                                                 aria-controls={`panel${index}-content`}
