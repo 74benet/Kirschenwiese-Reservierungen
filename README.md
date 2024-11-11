@@ -49,7 +49,7 @@ Dieses Projekt ist eine Webanwendung, die es einem Restaurant ermöglicht, einge
    cd server
    npm start
 
-### Alternativ über die Docker Compose
+### Alternativ über die Docker Compose (BUGGED)
 1. **Docker Compose starten**
     ```bash
     docker-compose up --build
@@ -69,3 +69,4 @@ Die Webanwendung zeigt eingehende Reservierungen an, und der Benutzer kann diese
 -  Deployment und Integration der Datenbank auf Google Cloud
 -  Verbesserung der Sicherheit und Implementierung eines Authentifizierungssystems.
 -  Integration mit Github Secrets (Momentan nur eine .env datei)
+-  Docker Compose beheben mit der Datenbank (vermutlich adresse falsch -> localhost weg)
