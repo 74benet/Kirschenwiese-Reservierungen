@@ -42,7 +42,7 @@ Dieses Projekt ist eine Webanwendung, die es einem Restaurant ermöglicht, einge
 
 4. **Docker Compose starten**
    ```bash
-   docker-compose up
+   docker-compose up --build
 
 ## Nutzung
    
