@@ -1,70 +1,60 @@
-# Getting Started with Create React App
+# Restaurant Reservations Web Application
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Dieses Projekt ist eine Webanwendung, die es einem Restaurant ermöglicht, eingehende Reservierungen zu verwalten. Die Anwendung besteht aus einem **Frontend**, das in **React** entwickelt wurde, und einem **Backend**, das in **JavaScript** implementiert ist. Die Datenbank verwendet **PostgreSQL**.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- Anzeige eingehender Reservierungen mit folgenden Informationen:
+  - Anzahl der Personen
+  - Datum der Reservierung
+  - Name des Kunden
+- Möglichkeit, Reservierungen anzunehmen oder abzulehnen
+- Lesestatus für jede Reservierung (gelesen/ungelesen)
 
-### `npm start`
+## Architektur
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **Frontend:** React
+- **Backend:** JavaScript (Node.js)
+- **Datenbank:** PostgreSQL
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Installation
 
-### `npm test`
+### Voraussetzungen
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- Node.js und npm installiert
+- PostgreSQL-Datenbank installiert und konfiguriert
 
-### `npm run build`
+### Schritte zur Installation
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+1. **Repository klonen**
+   ```bash
+   git clone https://github.com/dein-repo/restaurant-reservations.git
+   cd restaurant-reservations
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+2. **Frontend-Abhängigkeiten installieren**
+   ```bash
+   npm install
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+3. **Backend-Abhängigkeiten installieren**
+   ```bash
+   cd server
+   npm install
 
-### `npm run eject`
+4. **Docker Compose starten**
+   ```bash
+   docker-compose up
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Nutzung
+   
+Das Frontend wird standardmäßig unter http://localhost:3000 laufen und das Backend unter http://localhost:8080.
+Die Webanwendung zeigt eingehende Reservierungen an, und der Benutzer kann diese annehmen oder ablehnen. Der Lesestatus gibt an, ob eine Reservierung bereits betrachtet wurde.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Einschränkungen
+- Das Backend funktioniert derzeit nur lokal.
+- Die Daten sind nicht universell zugänglich und können nur mit den richtigen Zugangsdaten
+  abgerufen werden.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+### To Do
+-  Deployment und Integration der Datenbank auf Google Cloud
+-  Verbesserung der Sicherheit und Implementierung eines Authentifizierungssystems.
+-  Integration mit Github Secrets (Momentan nur eine .env datei)
