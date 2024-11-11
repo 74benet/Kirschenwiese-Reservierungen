@@ -28,7 +28,7 @@ Dieses Projekt ist eine Webanwendung, die es einem Restaurant ermöglicht, einge
 
 1. **Repository klonen**
    ```bash
-   git clone https://github.com/dein-repo/restaurant-reservations.git
+   git clone https://github.com/74benet/Kirschenwiese-Reservierungen.git
    cd restaurant-reservations
 
 2. **Frontend-Abhängigkeiten installieren**
