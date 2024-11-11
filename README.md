@@ -35,14 +35,25 @@ Dieses Projekt ist eine Webanwendung, die es einem Restaurant ermöglicht, einge
    ```bash
    npm install
 
-3. **Backend-Abhängigkeiten installieren**
+3. **Frontend starten**
+   ```bash
+   npm start
+
+4. **Backend-Abhängigkeiten installieren**
    ```bash
    cd server
    npm install
 
-4. **Docker Compose starten**
+5. **Backend starten**
    ```bash
-   docker-compose up --build
+   cd server
+   npm start
+
+### Alternativ über die Docker Compose
+1. **Docker Compose starten**
+    ```bash
+    docker-compose up --build
+
 
 ## Nutzung
    
