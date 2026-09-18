@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import {
     Container,
@@ -13,7 +13,6 @@ import {
     useTheme,
     IconButton,
     Fade,
-    Zoom,
     Button,
     Dialog,
     DialogTitle,
@@ -22,6 +21,7 @@ import {
     Select,
     MenuItem,
     FormControl,
+    Alert,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -53,25 +53,34 @@ const customTheme = createTheme({
 });
 const backend_url = process.env.REACT_APP_BACKEND_URL;
 
+// Wie oft die Liste automatisch aus der Datenbank nachgeladen wird (der Server holt selbst regelmäßig neue E-Mails)
+const AUTO_RELOAD_MS = 30_000;
+
 const EmailList = () => {
     const [emails, setEmails] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState(null);
     const [selectedEmail, setSelectedEmail] = useState(null);
     const [sortBy, setSortBy] = useState('input');
-    const emailsPerPage = 10;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
+    // Verhindert, dass eine ältere, langsamere Antwort eine neuere überschreibt
+    const requestIdRef = useRef(0);
 
     const fetchEmails = useCallback(async () => {
+        const requestId = ++requestIdRef.current;
         try {
-            setLoading(true);
-            const response = await axios.get(`${backend_url}/emails?sortBy=${sortBy}`);
-            setEmails(response.data); // Die Datenbankantwort wird hier übernommen
-        } catch (error) {
-            console.error('Error fetching emails:', error);
+            const response = await axios.get(`${backend_url}/emails`, { params: { sortBy } });
+            if (requestId === requestIdRef.current) {
+                setEmails(response.data);
+                setError(null);
+            }
+        } catch (err) {
+            console.error('Error fetching emails:', err);
+            if (requestId === requestIdRef.current) setError('Reservierungen konnten nicht geladen werden.');
         } finally {
-            setLoading(false);
+            if (requestId === requestIdRef.current) setLoading(false);
         }
     }, [sortBy]);
 
@@ -79,16 +88,43 @@ const EmailList = () => {
         fetchEmails();
     }, [fetchEmails]);
 
+    // Automatisch nachladen: regelmäßig und sobald die App wieder in den Vordergrund kommt
+    useEffect(() => {
+        const reloadIfVisible = () => {
+            if (document.visibilityState === 'visible') fetchEmails();
+        };
+        const interval = setInterval(reloadIfVisible, AUTO_RELOAD_MS);
+        document.addEventListener('visibilitychange', reloadIfVisible);
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', reloadIfVisible);
+        };
+    }, [fetchEmails]);
+
     const handleSortChange = (event) => {
+        setLoading(true);
         setSortBy(event.target.value);
     };
 
-    const handleUpdateEmails = () => {
-        fetchEmails();
+    // Holt zuerst neue E-Mails vom Mailserver (das Backend antwortet erst, wenn alles gespeichert ist)
+    // und lädt danach die Liste neu
+    const handleUpdateEmails = async () => {
+        if (refreshing) return;
+        setRefreshing(true);
+        let refreshFailed = false;
+        try {
+            await axios.post(`${backend_url}/refresh-emails`);
+        } catch (err) {
+            console.error('Error refreshing emails:', err);
+            refreshFailed = true;
+        }
+        await fetchEmails();
+        if (refreshFailed) setError('Neue E-Mails konnten nicht vom Mailserver abgerufen werden.');
+        setRefreshing(false);
     };
 
     const generateMailtoLink = (email, subjectPrefix, body) => {
-        return `mailto:${email.email}?subject=${(subjectPrefix + "Reservierung Pizzeria Kirschenwiese")}&body=${encodeURIComponent(body)}`;
+        return `mailto:${email.email}?subject=${encodeURIComponent(subjectPrefix + 'Reservierung Pizzeria Kirschenwiese')}&body=${encodeURIComponent(body)}`;
     };
 
     const formatDate = (date) => {
@@ -109,47 +145,17 @@ const EmailList = () => {
         setSelectedEmail(null);
     };
 
+    // status = true: erledigt (angenommen oder abgelehnt), false: ungelesen
     const handleStatusUpdate = async (email, status) => {
+        const previousStatus = email.status;
+        // Sofort in der Oberfläche anzeigen, bei einem Fehler wieder zurücksetzen
+        setEmails(current => current.map(e => (e.id === email.id ? { ...e, status } : e)));
         try {
-            // API-Aufruf zum Setzen des Status auf true und Verwendung des Reservierungsdatums
-            const response = await axios.post(`${backend_url}/emails/${email.id}/status`, {
-                name: email.name,
-                persons: email.persons,
-                date: email.dateTime || email.date, // Sende das Reservierungsdatum oder als Fallback das Eingangsdatum
-                status: status
-            });
-
-            if (response.status === 200) {
-                // Erfolg: Setze den Status der E-Mail lokal auf true
-                const updatedEmails = emails.map(e =>
-                    e.id === email.id ? { ...e, status: true } : e
-                );
-                setEmails(updatedEmails);  // Aktualisiere den Zustand der E-Mails im Frontend
-            }
-        } catch (error) {
-            console.error('Fehler beim Aktualisieren des Status:', error);
-        }
-    };
-
-    const handleMarkAsUnread = async (email, status ) => {
-        try {
-            // API-Aufruf zum Setzen des Status auf false
-            const response = await axios.post(`${backend_url}/emails/${email.id}/status`, {
-                name: email.name,
-                persons: email.persons,
-                date: email.dateTime || email.date, // Sende das Reservierungsdatum oder als Fallback das Eingangsdatum
-                status: status
-            });
-
-            if (response.status === 200) {
-                // Erfolg: Setze den Status der E-Mail lokal auf false
-                const updatedEmails = emails.map(e =>
-                    e.id === email.id ? { ...e, status: false } : e
-                );
-                setEmails(updatedEmails);  // Aktualisiere den Zustand der E-Mails im Frontend
-            }
-        } catch (error) {
-            console.error('Fehler beim Setzen des Status auf Ungelesen:', error);
+            await axios.post(`${backend_url}/emails/${email.id}/status`, { status });
+        } catch (err) {
+            console.error('Fehler beim Aktualisieren des Status:', err);
+            setEmails(current => current.map(e => (e.id === email.id ? { ...e, status: previousStatus } : e)));
+            setError('Status konnte nicht gespeichert werden.');
         }
     };
 
@@ -160,13 +166,15 @@ const EmailList = () => {
                     src={`${process.env.PUBLIC_URL}/logo-shadow.png`}
                     alt="Logo"
                     style={{ height: '200px', width: 'auto', cursor: 'pointer' }}
-                    onClick={() => fetchEmails()}
+                    onClick={handleUpdateEmails}
                 />
                 <Box display="flex" justifyContent="center" alignItems="center" mb={2} width={isMobile ? '90%' : '92%'}>
                     <IconButton
                         variant="contained"
                         color="primary"
                         onClick={handleUpdateEmails}
+                        disabled={refreshing}
+                        aria-label="Neue Reservierungen abrufen"
                         sx={{
                             backgroundColor: 'white',
                             color: '#333',
@@ -180,9 +188,16 @@ const EmailList = () => {
                                 color: 'rgba(255, 235, 0, 0.8)',
                                 backgroundColor: 'rgba(255, 255, 255, 1)',
                             },
+                            '&.Mui-disabled': {
+                                backgroundColor: 'white',
+                            },
                         }}
                     >
-                        <RefreshIcon fontSize="large" />
+                        {refreshing ? (
+                            <CircularProgress size={35} thickness={5} style={{ color: '#333' }} />
+                        ) : (
+                            <RefreshIcon fontSize="large" />
+                        )}
                     </IconButton>
 
                     <FormControl
@@ -218,6 +233,11 @@ const EmailList = () => {
 
                 </Box>
                 <Container>
+                    {error && (
+                        <Alert severity="error" onClose={() => setError(null)} sx={{ mx: '10px', mb: 1 }}>
+                            {error}
+                        </Alert>
+                    )}
                     {loading ? (
                         <Box display="flex" justifyContent="center" my={2}>
                             <Fade
@@ -236,8 +256,8 @@ const EmailList = () => {
                     ) : (
                         <Box>
                             {emails.map((email, index) => (
-                                <Zoom in={!loading} key={index}>
                                     <Paper
+                                        key={email.id}
                                         elevation={3}
                                         style={{
                                             marginBottom: '10px',
@@ -340,7 +360,7 @@ const EmailList = () => {
                                                         <Button
                                                             variant="contained"
                                                             color="error"
-                                                            onClick={() => handleStatusUpdate(email, false)}
+                                                            onClick={() => handleStatusUpdate(email, true)}
                                                             href={generateMailtoLink(
                                                                 email,
                                                                 'Ablehnen: ',
@@ -361,7 +381,7 @@ const EmailList = () => {
                                                     <Button
                                                         variant="contained"
                                                         color="secondary"
-                                                        onClick={() => handleMarkAsUnread(email,false)}
+                                                        onClick={() => handleStatusUpdate(email, false)}
                                                         startIcon={<Visibility style={{ color: 'white' }} />}
                                                         style={{
                                                             backgroundColor: 'rgb(185,87,185)',  // Blasseres Lila für "Ungelesen Markieren"
@@ -392,7 +412,6 @@ const EmailList = () => {
                                             </AccordionDetails>
                                         </Accordion>
                                     </Paper>
-                                </Zoom>
                             ))}
                         </Box>
                     )}

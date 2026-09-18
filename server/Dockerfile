@@ -1,5 +1,5 @@
 # Backend Dockerfile
-FROM node:16
+FROM node:20
 
 # Set the working directory
 WORKDIR /usr/src/app
@@ -8,7 +8,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm ci --omit=dev
 
 # Copy the rest of the application code
 COPY . .

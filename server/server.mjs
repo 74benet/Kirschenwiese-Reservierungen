@@ -5,160 +5,155 @@
 // - cors: Middleware, die Cross-Origin Resource Sharing (CORS) ermöglicht
 // - dotenv: Zum Laden von Umgebungsvariablen aus einer .env-Datei
 // - ImapService: Klasse für die IMAP-Verbindung, um E-Mails abzurufen
-// - EmailProcessor: Klasse zur Verarbeitung von E-Mails
-// - EmailDatabaseService: Klasse zur einbindungen der Datenbank
+// - EmailProcessor: Funktionen zur Verarbeitung von E-Mails
+// - EmailDatabaseService: Klasse zur Einbindung der Datenbank
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { ImapService } from './models/ImapService.mjs';
-import { EmailProcessor } from './models/EmailProcessor.mjs';
+import { isRelevantSubject, processMessages } from './models/EmailProcessor.mjs';
 import { EmailDatabaseService } from './db/DatabaseService.mjs';
-
-import pkg from 'pg';
-const { Pool } = pkg;
 
 // Laden der Umgebungsvariablen aus der .env-Datei (über den angegebenen Pfad)
 dotenv.config({ path: '../.env' });
 
-const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT,
-});
-
 // Initialisierung der Express-Anwendung
 const app = express();
-const port = process.env.PORT || 8080; // Port, auf dem der Server laufen soll
+const port = process.env.PORT || 8080;
+// Wie oft der Server selbstständig nach neuen E-Mails schaut (Standard: 60 Sekunden)
+const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MS) || 60_000;
 
-// Hinzufügen von CORS-Middleware, um Cross-Origin-Anfragen zu erlauben
 app.use(cors());
-app.use(express.json());  // JSON-Parsing hinzufügen
-
-
-// Variable zum Speichern der E-Mails, die vom IMAP-Server abgerufen wurden
-let storedEmails = [];
+app.use(express.json());
 
 // Konfiguration für die IMAP-Verbindung (wird aus den Umgebungsvariablen geladen)
 const imapConfig = {
-    user: process.env.REACT_APP_USER,       // IMAP-Benutzername
-    password: process.env.REACT_APP_PASSWORD, // IMAP-Passwort
-    host: process.env.REACT_APP_HOST,       // IMAP-Host-Adresse
-    port: process.env.REACT_APP_PORT,       // IMAP-Port
-    tls: true,                              // TLS-Option für sichere Verbindung
-    connTimeout: 30000,                     // Timeout für Verbindungsaufbau
-    authTimeout: 30000,                     // Timeout für Authentifizierung
-    debug: console.log,                     // Debugging-Option (Protokollausgabe)
+    user: process.env.REACT_APP_USER,
+    password: process.env.REACT_APP_PASSWORD,
+    host: process.env.REACT_APP_HOST,
+    port: process.env.REACT_APP_PORT,
+    tls: true,
+    connTimeout: 30000,
+    authTimeout: 30000,
+    // Nur bei Bedarf aktivieren: protokolliert sonst jede E-Mail komplett und bremst stark
+    debug: process.env.IMAP_DEBUG === 'true' ? console.log : undefined,
 };
 
-// Instanz der ImapService-Klasse, die die Verbindung zum IMAP-Server handhabt
 const imapService = new ImapService(imapConfig);
-// Instanz der EmailProcessor-Klasse, die für die Verarbeitung und Filterung der E-Mails verantwortlich ist
-const emailProcessor = new EmailProcessor();
-// TODO
-const emailDatabaseService = new EmailDatabaseService();
+const db = new EmailDatabaseService();
 
-// Funktion zum Abrufen und Aktualisieren der E-Mails
-// Funktion zum Abrufen und Aktualisieren der E-Mails
-const updateEmails = async () => {
-    try {
-        // Verbindung zum IMAP-Server herstellen
-        await imapService.connect();
+// Zustand des E-Mail-Abgleichs. Nach dem ersten vollständigen Abruf werden nur noch neue E-Mails geholt.
+const syncState = {
+    lastUid: 0,
+    uidValidity: null,
+    lastSync: null,
+    lastError: null,
+};
+let runningSync = null;
 
-        // Bestimmen des Datums vor drei Monaten für die E-Mail-Suche
-        const threeMonthsAgo = new Date();
-        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+const runSync = async () => {
+    const started = Date.now();
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-        // Abrufen der E-Mails vom IMAP-Server, die in den letzten drei Monaten empfangen wurden
-        const fetchStream = await imapService.fetchEmails(threeMonthsAgo);
+    const { messages, maxUid, uidValidity, incremental } = await imapService.fetchMessages({
+        since: threeMonthsAgo,
+        afterUid: syncState.lastUid,
+        uidValidity: syncState.uidValidity,
+        isRelevantSubject,
+    });
 
-        // Verarbeitung jeder E-Mail-Nachricht
-        fetchStream.on('message', (msg, seqno) => {
-            emailProcessor.processMessage(msg, seqno); // Verarbeiten der Nachricht über EmailProcessor
-        });
+    const { reservations, replies } = processMessages(messages);
+    const added = await db.saveReservations(reservations);
+    // Antworten auf ältere, schon gespeicherte Reservierungen nur bei neuen E-Mails übernehmen,
+    // damit ein manuell auf "ungelesen" gesetzter Eintrag nach einem Neustart nicht überschrieben wird
+    const answered = incremental ? await db.markAnswered(replies) : 0;
 
-        // Sobald das Abrufen der E-Mails abgeschlossen ist
-        fetchStream.once('end', async () => {
-            // Speichern der verarbeiteten E-Mails und Sortierung nach Datum
-            storedEmails = emailProcessor.getEmails().sort((a, b) => b.date - a.date);
+    // Erst nach erfolgreichem Speichern weiterzählen, sonst würden E-Mails beim nächsten Mal übersprungen
+    syncState.lastUid = maxUid;
+    syncState.uidValidity = uidValidity;
+    syncState.lastSync = new Date();
+    syncState.lastError = null;
 
-            // Speichere die gefilterten E-Mails in der Datenbank
-            for (const email of storedEmails) {
-                await emailDatabaseService.saveEmail(email);  // Speichere jede E-Mail in der DB
-            }
-
-            console.log('E-Mails wurden aktualisiert und gespeichert');
-            // Schließen der IMAP-Verbindung
-            imapService.closeConnection();
-        });
-    } catch (err) {
-        // Fehlerbehandlung für den Fall, dass beim Abrufen oder Verarbeiten der E-Mails ein Fehler auftritt
-        console.error('Fehler beim Aktualisieren der E-Mails:', err);
-    }
+    const result = { added, answered, checked: messages.length, durationMs: Date.now() - started };
+    console.log(`E-Mail-Abgleich (${incremental ? 'inkrementell' : 'vollständig'}):`, result);
+    return result;
 };
 
+// Es läuft immer höchstens ein Abgleich gleichzeitig. Weitere Aufrufe warten auf den laufenden.
+const syncEmails = () => {
+    if (!runningSync) {
+        runningSync = runSync()
+            .catch((err) => {
+                syncState.lastError = err.message;
+                console.error('Fehler beim Aktualisieren der E-Mails:', err);
+                throw err;
+            })
+            .finally(() => {
+                runningSync = null;
+            });
+    }
+    return runningSync;
+};
 
-// Aufruf der Funktion, um die E-Mails beim Start des Servers zu aktualisieren
-updateEmails();
-
-// GET-Route zum Abrufen der E-Mails
+// GET-Route zum Abrufen der E-Mails (sortBy: "input" = Eingangsdatum, "date" = Reservierungsdatum)
 app.get('/emails', async (req, res) => {
     try {
-        const query = `
-            SELECT id, name, persons, email, date, text, status, input
-            FROM emails
-            ORDER BY input DESC;
-        `;
-        const result = await pool.query(query);
-        // Rückgabe der E-Mails als JSON
-        res.json(result.rows);
+        res.json(await db.listEmails(req.query.sortBy));
     } catch (err) {
         console.error('Fehler beim Abrufen der E-Mails:', err);
         res.status(500).json({ message: 'Fehler beim Abrufen der E-Mails' });
     }
 });
 
-
-
-// POST-Route zum manuellen Aktualisieren der E-Mails
+// POST-Route zum manuellen Aktualisieren der E-Mails. Antwortet erst, wenn wirklich alles gespeichert ist.
 app.post('/refresh-emails', async (req, res) => {
-    await updateEmails(); // Abrufen der neuen E-Mails
-    res.send({ message: 'E-Mails wurden aktualisiert' }); // Senden einer Bestätigung
+    try {
+        const result = await syncEmails();
+        res.json({ message: 'E-Mails wurden aktualisiert', ...result });
+    } catch (err) {
+        res.status(502).json({ message: 'E-Mails konnten nicht vom Mailserver abgerufen werden', error: err.message });
+    }
 });
 
-// Backend-Route, um den Status einer E-Mail auf true zu setzen
+// Status des Abgleichs (z. B. zur Fehlersuche)
+app.get('/sync-status', (req, res) => {
+    res.json({ ...syncState, running: Boolean(runningSync) });
+});
+
+// Setzt den Status (erledigt / ungelesen) einer Reservierung anhand ihrer ID
 app.post('/emails/:id/status', async (req, res) => {
-    const { name, persons, date, status  } = req.body;
+    const id = Number(req.params.id);
+    const { status } = req.body;
+
+    if (!Number.isInteger(id) || typeof status !== 'boolean') {
+        return res.status(400).json({ message: 'Ungültige ID oder Status' });
+    }
 
     try {
-        console.log('Updating email with name:', name, 'persons:', persons, 'date:', date);
-
-        // SQL-Abfrage, um die E-Mail zu aktualisieren
-        const updateQuery = `
-            UPDATE emails
-            SET status = $4  -- Status dynamisch setzen
-            WHERE name = $1 AND persons = $2 AND DATE(date) = DATE($3)
-            RETURNING *;
-        `;
-        const result = await pool.query(updateQuery, [name, persons, date, status]);
-
-        console.log('Query result:', result);
-
-        if (result && result.rows.length > 0) {
-            res.status(200).json(result.rows[0]);
-        } else {
-            res.status(404).json({ message: 'Email not found' });
-        }
+        const row = await db.setStatus(id, status);
+        if (!row) return res.status(404).json({ message: 'Email not found' });
+        res.json(row);
     } catch (err) {
         console.error('Fehler beim Aktualisieren des Status:', err);
         res.status(500).json({ message: 'Fehler beim Aktualisieren des Status' });
     }
 });
 
+const start = async () => {
+    try {
+        await db.ensureSchema();
+    } catch (err) {
+        console.error('Datenbank nicht erreichbar oder Tabelle konnte nicht angelegt werden:', err.message);
+    }
 
+    app.listen(port, '0.0.0.0', () => {
+        console.log(`Server läuft auf Port ${port}`);
+    });
 
-// Start des Servers, der auf dem angegebenen Port (Standard: 8080) läuft
-app.listen(port, '0.0.0.0', () => {
-    console.log(`Server läuft auf Port ${port}`);
-});
+    // Erster Abgleich beim Start, danach regelmäßig im Hintergrund
+    syncEmails().catch(() => {});
+    setInterval(() => syncEmails().catch(() => {}), syncIntervalMs);
+};
+
+start();

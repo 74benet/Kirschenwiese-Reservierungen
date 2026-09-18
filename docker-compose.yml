@@ -5,12 +5,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Wird beim Build fest ins Frontend eingebaut (muss vom Browser aus erreichbar sein)
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8080}
     ports:
       - "3000:3000"
     depends_on:
       - backend
-    env_file:
-      - .env
 
   backend:
     build:
@@ -22,18 +23,20 @@ services:
       - db
     env_file:
       - .env
+    environment:
+      # Im Docker-Netzwerk heißt die Datenbank "db", nicht "localhost"
+      DB_HOST: db
+      DB_PORT: 5432
 
   db:
     image: postgres:13
     environment:
-      POSTGRES_USER: ${PGUSER}
-      POSTGRES_PASSWORD: ${PGPASSWORD}
-      POSTGRES_DB: ${PGDATABASE}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-    env_file:
-      - .env
 volumes:
   pgdata:
