@@ -51,7 +51,8 @@ const customTheme = createTheme({
         },
     },
 });
-const backend_url = process.env.REACT_APP_BACKEND_URL;
+// Leer = gleicher Server wie das Frontend (so läuft es auf Cloud Run)
+const backend_url = process.env.REACT_APP_BACKEND_URL || '';
 
 // Wie oft die Liste automatisch aus der Datenbank nachgeladen wird (der Server holt selbst regelmäßig neue E-Mails)
 const AUTO_RELOAD_MS = 30_000;

@@ -7,6 +7,9 @@
 // - ImapService: Klasse für die IMAP-Verbindung, um E-Mails abzurufen
 // - EmailProcessor: Funktionen zur Verarbeitung von E-Mails
 // - EmailDatabaseService: Klasse zur Einbindung der Datenbank
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -96,9 +99,22 @@ const syncEmails = () => {
     return runningSync;
 };
 
+// Ist der letzte Abgleich zu alt, wird vorher abgeglichen. Nötig z. B. auf Cloud Run,
+// wo der Server ohne Anfragen schläft und der Hintergrund-Abgleich nicht läuft.
+const syncIfStale = async () => {
+    const age = syncState.lastSync ? Date.now() - syncState.lastSync.getTime() : Infinity;
+    if (age < syncIntervalMs && !runningSync) return;
+    try {
+        await syncEmails();
+    } catch {
+        // Fehler ist schon protokolliert, die vorhandenen Daten werden trotzdem ausgeliefert
+    }
+};
+
 // GET-Route zum Abrufen der E-Mails (sortBy: "input" = Eingangsdatum, "date" = Reservierungsdatum)
 app.get('/emails', async (req, res) => {
     try {
+        await syncIfStale();
         res.json(await db.listEmails(req.query.sortBy));
     } catch (err) {
         console.error('Fehler beim Abrufen der E-Mails:', err);
@@ -154,6 +170,13 @@ app.post('/emails/:id/status', async (req, res) => {
         res.status(500).json({ message: 'Fehler beim Aktualisieren des Status' });
     }
 });
+
+// Liegt das gebaute Frontend im Ordner "public" (siehe Dockerfile), liefert der Server es gleich mit aus
+const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
+if (fs.existsSync(publicDir)) {
+    app.use(express.static(publicDir));
+    app.get('*', (req, res) => res.sendFile(path.join(publicDir, 'index.html')));
+}
 
 const start = async () => {
     try {

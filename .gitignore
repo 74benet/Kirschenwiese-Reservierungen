@@ -25,3 +25,6 @@ yarn-debug.log*
 yarn-error.log*
 .env
 
+
+# Gebautes Frontend im Server (nur lokal / im Container)
+/server/public

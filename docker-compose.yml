@@ -1,22 +1,9 @@
 version: '3.8'
 
+# Lokal mit eigener Datenbank starten: docker-compose up --build  ->  http://localhost:8080
 services:
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        # Wird beim Build fest ins Frontend eingebaut (muss vom Browser aus erreichbar sein)
-        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8080}
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-
-  backend:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
+  app:
+    build: .
     ports:
       - "8080:8080"
     depends_on:
@@ -24,9 +11,10 @@ services:
     env_file:
       - .env
     environment:
-      # Im Docker-Netzwerk heißt die Datenbank "db", nicht "localhost"
+      # Im Docker-Netzwerk heißt die Datenbank "db"
       DB_HOST: db
       DB_PORT: 5432
+      DB_SSL: "false"
 
   db:
     image: postgres:13
@@ -34,8 +22,6 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 volumes:

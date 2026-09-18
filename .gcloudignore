@@ -1,0 +1,10 @@
+# Dateien, die beim "gcloud run deploy --source ." nicht hochgeladen werden
+.gcloudignore
+.git
+.gitignore
+.idea
+node_modules/
+server/node_modules/
+build/
+.env
+.mcp.json
