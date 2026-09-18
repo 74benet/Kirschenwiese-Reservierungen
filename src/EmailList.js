@@ -55,6 +55,7 @@ const backend_url = process.env.REACT_APP_BACKEND_URL;
 
 // Wie oft die Liste automatisch aus der Datenbank nachgeladen wird (der Server holt selbst regelmäßig neue E-Mails)
 const AUTO_RELOAD_MS = 30_000;
+const EMAILS_PER_PAGE = 30;
 
 const EmailList = () => {
     const [emails, setEmails] = useState([]);
@@ -63,6 +64,8 @@ const EmailList = () => {
     const [error, setError] = useState(null);
     const [selectedEmail, setSelectedEmail] = useState(null);
     const [sortBy, setSortBy] = useState('input');
+    // Nur einen Teil der Liste anzeigen, alle Einträge auf einmal machen die Seite (v. a. am Handy) langsam
+    const [visibleCount, setVisibleCount] = useState(EMAILS_PER_PAGE);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     // Verhindert, dass eine ältere, langsamere Antwort eine neuere überschreibt
@@ -104,6 +107,7 @@ const EmailList = () => {
     const handleSortChange = (event) => {
         setLoading(true);
         setSortBy(event.target.value);
+        setVisibleCount(EMAILS_PER_PAGE);
     };
 
     // Holt zuerst neue E-Mails vom Mailserver (das Backend antwortet erst, wenn alles gespeichert ist)
@@ -128,6 +132,7 @@ const EmailList = () => {
     };
 
     const formatDate = (date) => {
+        if (!date) return 'Kein Datum';
         return new Date(date).toLocaleString('de-DE', {
             day: '2-digit',
             month: '2-digit',
@@ -137,8 +142,16 @@ const EmailList = () => {
         });
     };
 
-    const handleViewFullEmail = (email) => {
-        setSelectedEmail(email);
+    // Der komplette Text wird erst beim Öffnen geladen, damit die Liste klein und schnell bleibt
+    const handleViewFullEmail = async (email) => {
+        setSelectedEmail({ ...email, text: null });
+        try {
+            const response = await axios.get(`${backend_url}/emails/${email.id}/text`);
+            setSelectedEmail(current => (current?.id === email.id ? { ...current, text: response.data.text } : current));
+        } catch (err) {
+            console.error('Fehler beim Laden der Nachricht:', err);
+            setSelectedEmail(current => (current?.id === email.id ? { ...current, text: 'Nachricht konnte nicht geladen werden.' } : current));
+        }
     };
 
     const handleCloseDialog = () => {
@@ -255,7 +268,7 @@ const EmailList = () => {
                         </Box>
                     ) : (
                         <Box>
-                            {emails.map((email, index) => (
+                            {emails.slice(0, visibleCount).map((email, index) => (
                                     <Paper
                                         key={email.id}
                                         elevation={3}
@@ -413,17 +426,32 @@ const EmailList = () => {
                                         </Accordion>
                                     </Paper>
                             ))}
+                            {visibleCount < emails.length && (
+                                <Box display="flex" justifyContent="center" my={2}>
+                                    <Button
+                                        variant="contained"
+                                        onClick={() => setVisibleCount(count => count + EMAILS_PER_PAGE)}
+                                        style={{ backgroundColor: 'white', color: '#333', fontWeight: 'bold' }}
+                                    >
+                                        Weitere anzeigen ({emails.length - visibleCount})
+                                    </Button>
+                                </Box>
+                            )}
                         </Box>
                     )}
                 </Container>
                 <Dialog open={Boolean(selectedEmail)} onClose={handleCloseDialog} maxWidth="md" fullWidth>
                     <DialogTitle>Ganze Nachricht</DialogTitle>
                     <DialogContent dividers>
-                        {selectedEmail && (
+                        {selectedEmail && (selectedEmail.text === null ? (
+                            <Box display="flex" justifyContent="center" my={2}>
+                                <CircularProgress />
+                            </Box>
+                        ) : (
                             <Typography variant="body1" component="div" style={{ whiteSpace: 'pre-wrap' }}>
                                 {selectedEmail.text}
                             </Typography>
-                        )}
+                        ))}
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={handleCloseDialog} color="primary">

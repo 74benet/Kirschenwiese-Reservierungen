@@ -13,6 +13,8 @@ export class EmailDatabaseService {
             database: process.env.DB_NAME,
             password: process.env.DB_PASSWORD,
             port: process.env.DB_PORT,
+            // Gehostete Datenbanken wie Supabase verlangen eine verschlüsselte Verbindung
+            ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
         });
         this.pool.on('error', (err) => console.error('Unerwarteter Datenbankfehler:', err.message));
     }
@@ -33,12 +35,13 @@ export class EmailDatabaseService {
         `);
     }
 
+    // Ohne den kompletten E-Mail-Text, damit die Liste klein bleibt (Text gibt es über getEmailText)
     async listEmails(sortBy) {
         const column = SORT_COLUMNS[sortBy] ?? SORT_COLUMNS.input;
         const result = await this.pool.query(`
-            SELECT id, name, persons, email, date, text, status, input
+            SELECT id, name, persons, email, date, status, input
             FROM emails
-            ORDER BY ${column} DESC, id DESC;
+            ORDER BY ${column} DESC NULLS LAST, id DESC;
         `);
         return result.rows;
     }
@@ -103,9 +106,14 @@ export class EmailDatabaseService {
         return updated;
     }
 
+    async getEmailText(id) {
+        const result = await this.pool.query(`SELECT text FROM emails WHERE id = $1;`, [id]);
+        return result.rows[0]?.text ?? null;
+    }
+
     async setStatus(id, status) {
         const result = await this.pool.query(
-            `UPDATE emails SET status = $2 WHERE id = $1 RETURNING id, name, persons, email, date, text, status, input;`,
+            `UPDATE emails SET status = $2 WHERE id = $1 RETURNING id, name, persons, email, date, status, input;`,
             [id, status]
         );
         return result.rows[0] ?? null;

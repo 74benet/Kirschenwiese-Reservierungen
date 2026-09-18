@@ -52,7 +52,8 @@ export const parseReservation = (parsed) => {
     // Extrahieren von Informationen aus dem E-Mail-Text mit regulären Ausdrücken
     const nameMatch = text.match(/Auf den Namen:\s*(.*)/);
     const personsMatch = text.match(/Für:\s*(\d+)\s*Personen/);
-    const dateTimeMatch = text.match(/Am.\s*(.*)/);
+    // Nur die Zeile "Am. <Datum>" (auch zitiert mit ">"), nicht z. B. "Am Montag, ... schrieb"
+    const dateTimeMatch = text.match(/^[>\s]*Am\.\s*(.*)/m);
     const userEmailMatch = text.match(/Von:\s*(.*)/);
 
     return {

@@ -121,6 +121,21 @@ app.get('/sync-status', (req, res) => {
     res.json({ ...syncState, running: Boolean(runningSync) });
 });
 
+// Kompletter E-Mail-Text einer Reservierung (wird erst beim Öffnen der Nachricht geladen)
+app.get('/emails/:id/text', async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: 'Ungültige ID' });
+
+    try {
+        const text = await db.getEmailText(id);
+        if (text === null) return res.status(404).json({ message: 'Email not found' });
+        res.json({ text });
+    } catch (err) {
+        console.error('Fehler beim Abrufen des E-Mail-Texts:', err);
+        res.status(500).json({ message: 'Fehler beim Abrufen des E-Mail-Texts' });
+    }
+});
+
 // Setzt den Status (erledigt / ungelesen) einer Reservierung anhand ihrer ID
 app.post('/emails/:id/status', async (req, res) => {
     const id = Number(req.params.id);
