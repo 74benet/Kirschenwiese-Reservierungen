@@ -30,6 +30,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import {Reorder, Visibility} from "@mui/icons-material";
+import { backend_url } from './api';
 
 const customTheme = createTheme({
     components: {
@@ -51,8 +52,6 @@ const customTheme = createTheme({
         },
     },
 });
-// Leer = gleicher Server wie das Frontend (so läuft es auf Cloud Run)
-const backend_url = process.env.REACT_APP_BACKEND_URL || '';
 
 // Wie oft die Liste automatisch aus der Datenbank nachgeladen wird (der Server holt selbst regelmäßig neue E-Mails)
 const AUTO_RELOAD_MS = 30_000;

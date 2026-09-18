@@ -7,6 +7,7 @@
 // - ImapService: Klasse für die IMAP-Verbindung, um E-Mails abzurufen
 // - EmailProcessor: Funktionen zur Verarbeitung von E-Mails
 // - EmailDatabaseService: Klasse zur Einbindung der Datenbank
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +29,28 @@ const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MS) || 60_000;
 
 app.use(cors());
 app.use(express.json());
+
+// Passwortschutz für alle Daten-Routen. Das Frontend schickt das Passwort im Header "X-App-Password".
+// Ohne APP_PASSWORD (z. B. lokal) ist der Schutz aus.
+const appPassword = process.env.APP_PASSWORD || '';
+if (!appPassword) console.warn('Achtung: APP_PASSWORD ist nicht gesetzt, die Daten sind ohne Passwort abrufbar.');
+
+const passwordMatches = (given) => {
+    const a = crypto.createHash('sha256').update(String(given ?? '')).digest();
+    const b = crypto.createHash('sha256').update(appPassword).digest();
+    return crypto.timingSafeEqual(a, b);
+};
+
+const requirePassword = (req, res, next) => {
+    if (!appPassword || passwordMatches(req.get('X-App-Password'))) return next();
+    // Kleine Verzögerung erschwert das Durchprobieren von Passwörtern
+    setTimeout(() => res.status(401).json({ message: 'Falsches Passwort' }), 1000);
+};
+
+app.use(['/emails', '/refresh-emails', '/sync-status', '/auth-check'], requirePassword);
+
+// Zum Prüfen des Passworts beim Anmelden
+app.get('/auth-check', (req, res) => res.json({ ok: true }));
 
 // Konfiguration für die IMAP-Verbindung (wird aus den Umgebungsvariablen geladen)
 const imapConfig = {
