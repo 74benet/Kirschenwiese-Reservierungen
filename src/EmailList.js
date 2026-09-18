@@ -30,7 +30,11 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import {Reorder, Visibility} from "@mui/icons-material";
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import { backend_url } from './api';
+import { disablePush, enablePush, getPushState } from './push';
 
 const customTheme = createTheme({
     components: {
@@ -57,11 +61,32 @@ const customTheme = createTheme({
 const AUTO_RELOAD_MS = 30_000;
 const EMAILS_PER_PAGE = 30;
 
+// Gemeinsamer Stil für die runden weißen Buttons oben
+const headerButtonSx = {
+    backgroundColor: 'white',
+    color: '#333',
+    marginRight: '10px',
+    transition: 'all 0.3s ease-in-out',
+    '&:hover': {
+        boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.5)',
+        transform: 'translateY(-2px)',
+        color: 'rgba(255, 235, 0, 0.8)',
+        backgroundColor: 'rgba(255, 255, 255, 1)',
+    },
+    '&.Mui-disabled': {
+        backgroundColor: 'white',
+    },
+};
+
 const EmailList = () => {
     const [emails, setEmails] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState(null);
+    const [info, setInfo] = useState(null);
+    const [pushState, setPushState] = useState('off');
+    const [pushBusy, setPushBusy] = useState(false);
+    const [calendarUrl, setCalendarUrl] = useState(null);
     const [selectedEmail, setSelectedEmail] = useState(null);
     const [sortBy, setSortBy] = useState('input');
     // Nur einen Teil der Liste anzeigen, alle Einträge auf einmal machen die Seite (v. a. am Handy) langsam
@@ -103,6 +128,55 @@ const EmailList = () => {
             document.removeEventListener('visibilitychange', reloadIfVisible);
         };
     }, [fetchEmails]);
+
+    useEffect(() => {
+        getPushState().then(setPushState).catch(() => setPushState('off'));
+    }, []);
+
+    const handleTogglePush = async () => {
+        if (pushState === 'unsupported') {
+            setInfo('Benachrichtigungen gehen auf dem iPhone nur, wenn die Seite über „Teilen → Zum Home-Bildschirm“ als App hinzugefügt wurde (ab iOS 16.4). Öffne sie dann über das App-Symbol.');
+            return;
+        }
+        if (pushState === 'denied') {
+            setInfo('Benachrichtigungen sind blockiert. Erlaube sie in den iPhone-Einstellungen unter „Mitteilungen“ für diese App.');
+            return;
+        }
+        setPushBusy(true);
+        try {
+            if (pushState === 'on') {
+                setPushState(await disablePush());
+                setInfo('Benachrichtigungen auf diesem Gerät ausgeschaltet.');
+            } else {
+                const state = await enablePush();
+                setPushState(state);
+                if (state === 'on') setInfo('Benachrichtigungen aktiv. Du solltest gleich eine Test-Benachrichtigung bekommen.');
+            }
+        } catch (err) {
+            console.error('Fehler bei den Benachrichtigungen:', err);
+            setError('Benachrichtigungen konnten nicht eingerichtet werden.');
+        }
+        setPushBusy(false);
+    };
+
+    const handleOpenCalendar = async () => {
+        try {
+            const { data } = await axios.get(`${backend_url}/calendar-url`);
+            setCalendarUrl(data.url);
+        } catch (err) {
+            console.error('Fehler beim Laden der Kalender-Adresse:', err);
+            setError('Kalender-Adresse konnte nicht geladen werden.');
+        }
+    };
+
+    const handleCopyCalendarUrl = async () => {
+        try {
+            await navigator.clipboard.writeText(calendarUrl);
+            setInfo('Kalender-Adresse kopiert.');
+        } catch {
+            setInfo('Kopieren nicht möglich – bitte die Adresse im Fenster markieren und kopieren.');
+        }
+    };
 
     const handleSortChange = (event) => {
         setLoading(true);
@@ -188,29 +262,32 @@ const EmailList = () => {
                         onClick={handleUpdateEmails}
                         disabled={refreshing}
                         aria-label="Neue Reservierungen abrufen"
-                        sx={{
-                            backgroundColor: 'white',
-                            color: '#333',
-                            marginRight: '10px',
-                            fontSize: '1rem',
-                            fontWeight: 'bold',
-                            transition: 'all 0.3s ease-in-out',
-                            '&:hover': {
-                                boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.5)',
-                                transform: 'translateY(-2px)',
-                                color: 'rgba(255, 235, 0, 0.8)',
-                                backgroundColor: 'rgba(255, 255, 255, 1)',
-                            },
-                            '&.Mui-disabled': {
-                                backgroundColor: 'white',
-                            },
-                        }}
+                        sx={headerButtonSx}
                     >
                         {refreshing ? (
                             <CircularProgress size={35} thickness={5} style={{ color: '#333' }} />
                         ) : (
                             <RefreshIcon fontSize="large" />
                         )}
+                    </IconButton>
+
+                    <IconButton
+                        onClick={handleTogglePush}
+                        disabled={pushBusy}
+                        aria-label={pushState === 'on' ? 'Benachrichtigungen ausschalten' : 'Benachrichtigungen einschalten'}
+                        sx={headerButtonSx}
+                    >
+                        {pushBusy ? (
+                            <CircularProgress size={35} thickness={5} style={{ color: '#333' }} />
+                        ) : pushState === 'on' ? (
+                            <NotificationsActiveIcon fontSize="large" style={{ color: '#4CAF50' }} />
+                        ) : (
+                            <NotificationsNoneIcon fontSize="large" />
+                        )}
+                    </IconButton>
+
+                    <IconButton onClick={handleOpenCalendar} aria-label="Kalender abonnieren" sx={headerButtonSx}>
+                        <CalendarMonthIcon fontSize="large" />
                     </IconButton>
 
                     <FormControl
@@ -249,6 +326,11 @@ const EmailList = () => {
                     {error && (
                         <Alert severity="error" onClose={() => setError(null)} sx={{ mx: '10px', mb: 1 }}>
                             {error}
+                        </Alert>
+                    )}
+                    {info && (
+                        <Alert severity="info" onClose={() => setInfo(null)} sx={{ mx: '10px', mb: 1 }}>
+                            {info}
                         </Alert>
                     )}
                     {loading ? (
@@ -440,6 +522,39 @@ const EmailList = () => {
                         </Box>
                     )}
                 </Container>
+                <Dialog open={Boolean(calendarUrl)} onClose={() => setCalendarUrl(null)} maxWidth="sm" fullWidth>
+                    <DialogTitle>Kalender abonnieren</DialogTitle>
+                    <DialogContent dividers>
+                        <Typography variant="body1" gutterBottom>
+                            Alle Reservierungen (letzte 30 Tage und alle kommenden) erscheinen automatisch in deinem Kalender.
+                            Die Kalender-App lädt ungefähr alle 15 Minuten neu.
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary" gutterBottom>
+                            Auf dem iPhone: „Direkt abonnieren“ tippen und bestätigen. Oder die Adresse kopieren und unter
+                            Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen einfügen.
+                        </Typography>
+                        <Typography
+                            variant="body2"
+                            component="div"
+                            sx={{ wordBreak: 'break-all', backgroundColor: '#f5f5f5', p: 1, borderRadius: 1, mt: 1, userSelect: 'all' }}
+                        >
+                            {calendarUrl}
+                        </Typography>
+                        <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+                            Die Adresse ist wie ein Passwort – nicht öffentlich teilen.
+                        </Typography>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={handleCopyCalendarUrl}>Adresse kopieren</Button>
+                        <Button
+                            variant="contained"
+                            href={calendarUrl ? calendarUrl.replace(/^https?:/, 'webcal:') : undefined}
+                        >
+                            Direkt abonnieren
+                        </Button>
+                        <Button onClick={() => setCalendarUrl(null)}>Schließen</Button>
+                    </DialogActions>
+                </Dialog>
                 <Dialog open={Boolean(selectedEmail)} onClose={handleCloseDialog} maxWidth="md" fullWidth>
                     <DialogTitle>Ganze Nachricht</DialogTitle>
                     <DialogContent dividers>

@@ -33,6 +33,17 @@ export class EmailDatabaseService {
                 input TIMESTAMPTZ
             );
         `);
+        // Geräte, die Push-Benachrichtigungen bekommen. RLS an und ohne Regeln: nur der Server
+        // (Datenbank-Benutzer) kommt ran, nicht die öffentliche Supabase-API.
+        await this.pool.query(`
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                endpoint TEXT PRIMARY KEY,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+        await this.pool.query(`ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;`);
     }
 
     // Ohne den kompletten E-Mail-Text, damit die Liste klein bleibt (Text gibt es über getEmailText)
@@ -47,11 +58,11 @@ export class EmailDatabaseService {
     }
 
     // Speichert neue Reservierungen. Bereits vorhandene (gleiche E-Mail, gleicher Tag, gleiche Personenzahl)
-    // werden übersprungen. Gibt die Anzahl der neu gespeicherten Einträge zurück.
+    // werden übersprungen. Gibt die neu gespeicherten Reservierungen zurück.
     async saveReservations(reservations) {
-        if (reservations.length === 0) return 0;
+        if (reservations.length === 0) return [];
         const client = await this.pool.connect();
-        let added = 0;
+        const added = [];
         try {
             for (const reservation of reservations) {
                 try {
@@ -74,7 +85,7 @@ export class EmailDatabaseService {
                             reservation.input,     // Eingangsdatum
                         ]
                     );
-                    added++;
+                    added.push(reservation);
                     console.log(`Neue Reservierung gespeichert: ${reservation.name} (${reservation.persons} Personen)`);
                 } catch (err) {
                     // Ein fehlerhafter Datensatz soll den restlichen Abgleich nicht blockieren
@@ -104,6 +115,35 @@ export class EmailDatabaseService {
             }
         }
         return updated;
+    }
+
+    // Reservierungen für das Kalender-Abo (ab einem Datum, nur mit Reservierungsdatum)
+    async listCalendarReservations(from) {
+        const result = await this.pool.query(
+            `SELECT id, name, persons, email, date, status, input
+             FROM emails
+             WHERE date >= $1
+             ORDER BY date;`,
+            [from]
+        );
+        return result.rows;
+    }
+
+    async savePushSubscription({ endpoint, keys }) {
+        await this.pool.query(
+            `INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES ($1, $2, $3)
+             ON CONFLICT (endpoint) DO UPDATE SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth;`,
+            [endpoint, keys.p256dh, keys.auth]
+        );
+    }
+
+    async deletePushSubscription(endpoint) {
+        await this.pool.query(`DELETE FROM push_subscriptions WHERE endpoint = $1;`, [endpoint]);
+    }
+
+    async listPushSubscriptions() {
+        const result = await this.pool.query(`SELECT endpoint, p256dh, auth FROM push_subscriptions;`);
+        return result.rows;
     }
 
     async getEmailText(id) {
